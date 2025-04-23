@@ -232,6 +232,7 @@ export default function ChatPage() {
                   placeholder="Type a message…"
                   className="flex-1 px-4 py-2 rounded-xl border border-white bg-white/95 text-sm focus:outline-none focus:ring-2 focus:ring-usfgold transition-all hover:border-white/40 shadow-sm"
                   maxLength={1000}
+                  style={{ fontSize: '16px' }}
                 />
                 <button
                   type="submit"
