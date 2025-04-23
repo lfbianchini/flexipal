@@ -72,7 +72,7 @@ const Navbar = () => {
   return (
     <nav ref={navRef} className="w-full bg-white shadow-card rounded-b-xl px-4 py-2 md:py-3 md:px-8 flex items-center z-30 relative">
       <span className="text-usfgreen font-bold text-xl tracking-tight select-none pr-4 md:pr-8">
-        <Link to="/" className="hover:opacity-80 transition">
+        <Link to="/" className="hover:opacity-80 transition" onClick={() => setMobileOpen(false)}>
           <span className="text-usfgreen">Flexi</span>
           <span className="text-usfgold">Pal</span>
         </Link>

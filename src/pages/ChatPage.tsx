@@ -156,7 +156,7 @@ export default function ChatPage() {
       </aside>
 
       {/* Chat conversation or welcome screen */}
-      <section className="flex-1 min-h-[300px] flex flex-col bg-gradient-to-br from-white/80 via-white/60 to-white/70 relative">
+      <section className="flex-1 min-w-0 min-h-[300px] flex flex-col bg-gradient-to-br from-white/80 via-white/60 to-white/70 relative">
         {conversationId ? (
           <>
             {/* Chat header (mobile only) */}
@@ -179,7 +179,7 @@ export default function ChatPage() {
             </div>
 
             {/* Messages scroll area */}
-            <div className="px-2 py-3 md:px-6 md:py-6 flex flex-col gap-3 flex-1 overflow-y-auto max-h-[44vh] md:max-h-[450px] min-h-[250px] md:min-h-[300px] relative">
+            <div className="px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 flex-1 w-full max-w-full overflow-y-auto max-h-[44vh] md:max-h-[450px] min-h-[250px] md:min-h-[300px] relative">
               {loading && showLoadingSpinner ? (
                 <div className="flex justify-center items-center h-32">
                   <Loader2 className="h-8 w-8 text-usfgreen animate-spin" />

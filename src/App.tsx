@@ -11,6 +11,8 @@ import ProfilePage from "./pages/ProfilePage";
 import NotVerified from "./pages/NotVerified";
 import AuthGuard from "./components/AuthGuard";
 import Index from "./pages/Index";
+import ConfirmPage from "./pages/ConfirmPage";
+import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +36,7 @@ const App = () => (
               <Routes>
                 {/* Public route */}
                 <Route path="/" element={<Index />} />
+                <Route path="/confirm" element={<ConfirmPage />} />
 
                 {/* Unverified users can access this */}
                 <Route 
@@ -78,6 +81,9 @@ const App = () => (
                     </AuthGuard>
                   }
                 />
+
+                {/* 404 catch-all route */}
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </div>
           </div>

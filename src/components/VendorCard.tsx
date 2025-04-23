@@ -37,10 +37,10 @@ const VendorCard = ({
           <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full ring-2 ring-white animate-pulse" />
         )}
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between">
-          <div>
-            <h3 className="font-semibold text-usfgreen group-hover:text-usfgreen-light transition-colors">{name}</h3>
+          <div className="min-w-0">
+            <h3 className="font-semibold break-words max-w-full text-usfgreen group-hover:text-usfgreen-light transition-colors">{name}</h3>
             <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
               <MapPin size={14} className="text-usfgold" /> 
               <span className="group-hover:text-gray-700 transition-colors">{location}</span>
@@ -65,7 +65,7 @@ const VendorCard = ({
           </button>
         </div>
         {note && (
-          <div className="mt-2 text-sm text-gray-600 bg-white/80 rounded-lg p-2 border border-white/50 group-hover:border-white transition-all">
+          <div className="mt-2 max-w-full break-words text-sm whitespace-pre-wrap overflow-x-hidden text-gray-600 bg-white/80 rounded-lg p-2 border border-white/50 group-hover:border-white transition-all overflow-hidden">
             {note}
           </div>
         )}

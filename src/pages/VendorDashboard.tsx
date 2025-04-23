@@ -195,7 +195,7 @@ const VendorDashboard = () => {
         )}
 
         {isLive && status?.note && (
-          <div className="mt-2 text-center text-gray-600 bg-white/80 rounded-lg p-3 border border-white/50 animate-fade-in">
+          <div className="mt-2 text-center break-words text-gray-600 bg-white/80 rounded-lg p-3 border border-white/50 animate-fade-in">
             {status.note}
           </div>
         )}

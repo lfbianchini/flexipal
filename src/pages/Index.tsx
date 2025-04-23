@@ -48,12 +48,18 @@ const FAQItem = ({ question, answer }: FAQItem) => {
         />
       </button>
       <div
-        className={`grid transition-all duration-200 ease-in-out ${
-          isOpen ? "grid-rows-[1fr] opacity-100 pb-4" : "grid-rows-[0fr] opacity-0"
-        }`}
+        style={{ 
+          height: isOpen ? 'auto' : 0,
+          visibility: isOpen ? 'visible' : 'hidden'
+        }}
+        className="transform-gpu transition-transform duration-200 ease-out origin-top"
       >
-        <div className="overflow-hidden">
-          <p className="text-gray-600 text-sm leading-relaxed">{answer}</p>
+        <div 
+          className={`transition-all duration-200 ease-out ${
+            isOpen ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
+          }`}
+        >
+          <p className="text-gray-600 text-sm leading-relaxed pb-4">{answer}</p>
         </div>
       </div>
     </div>
@@ -80,7 +86,7 @@ const Index = () => {
 
         {/* Welcoming Title */}
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-usfgreen text-center drop-shadow-lg">
-          Welcome to <span className="inline-block animate-pulse bg-gradient-to-r from-usfgold to-usfgreen bg-clip-text text-transparent">FlexiPal</span>!
+          Welcome to <span className="inline-block animate-pulse bg-gradient-to-r from-usfgold to-usfgreen bg-clip-text text-transparent whitespace-nowrap">FlexiPal!</span>
         </h1>
         
         {/* Tagline */}

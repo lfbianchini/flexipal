@@ -149,24 +149,26 @@ export default function AuthModal({ open, mode, onClose }: AuthModalProps) {
                 minLength={6}
               />
               <DialogFooter>
-                <Button 
-                  type="submit" 
-                  disabled={loading}
-                  className={`bg-usfgreen hover:bg-usfgreen-light active:bg-usfgreen/90 text-white transition-colors ${
-                    loading ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-                >
-                  {loading ? "Loading..." : mode === "signup" ? "Sign Up" : "Sign In"}
-                </Button>
-                <DialogClose asChild>
+                <div className="flex flex-col-reverse sm:flex-row w-full gap-2">
                   <Button 
-                    type="button" 
-                    variant="outline"
-                    className="hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                    type="submit" 
+                    disabled={loading}
+                    className={`w-full bg-usfgreen hover:bg-usfgreen-light active:bg-usfgreen/90 text-white transition-colors ${
+                      loading ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
                   >
-                    Cancel
+                    {loading ? "Loading..." : mode === "signup" ? "Sign Up" : "Sign In"}
                   </Button>
-                </DialogClose>
+                  <DialogClose asChild>
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      className="w-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
+                    >
+                      Cancel
+                    </Button>
+                  </DialogClose>
+                </div>
               </DialogFooter>
             </form>
           </>

@@ -61,13 +61,16 @@ export function useAuth() {
   // Auth helpers
   const signUp = useCallback(
     async (email: string, password: string, full_name: string) => {
+      const seed = encodeURIComponent(full_name);
+      const avatarUrl = `https://api.dicebear.com/9.x/glass/svg?seed=${seed}`
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             full_name,
-            avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(full_name)}`
+            avatar_url: avatarUrl
           }
         }
       });
