@@ -179,7 +179,7 @@ export default function ChatPage() {
             </div>
 
             {/* Messages scroll area */}
-            <div className="px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 flex-1 w-full max-w-full overflow-y-auto max-h-[calc(100vh-180px)] md:max-h-[450px] min-h-[250px] md:min-h-[300px] relative pb-16 md:pb-0">
+            <div className="px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 flex-1 w-full max-w-full overflow-y-auto max-h-[44vh] md:max-h-[450px] min-h-[250px] md:min-h-[300px] relative">
               {loading && showLoadingSpinner ? (
                 <div className="flex justify-center items-center h-32">
                   <Loader2 className="h-8 w-8 text-usfgreen animate-spin" />
@@ -224,11 +224,8 @@ export default function ChatPage() {
             </div>
 
             {/* Send bar */}
-            <form 
-              onSubmit={handleSendMessage} 
-              className="px-2 md:px-6 pt-3 md:pt-4 pb-4 bg-white backdrop-blur-sm border-t border-white shadow-[0_-1px_2px_0_rgba(255,255,255,0.5)] mt-[1px] fixed md:relative bottom-0 left-0 right-0 md:bottom-auto md:left-auto md:right-auto"
-            >
-              <div className="flex gap-2.5 max-w-4xl mx-auto">
+            <form onSubmit={handleSendMessage} className="px-2 md:px-6 pt-3 md:pt-4 pb-4 bg-white backdrop-blur-sm border-t border-white shadow-[0_-1px_2px_0_rgba(255,255,255,0.5)] mt-[1px]">
+              <div className="flex gap-2.5">
                 <input
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
