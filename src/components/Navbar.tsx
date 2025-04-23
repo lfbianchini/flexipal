@@ -35,7 +35,7 @@ const Navbar = () => {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [authModal, setAuthModal] = useState<null | "signin" | "signup">(null);
-  const { user, profile, isAdmin, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const { status } = useVendorStatus();
   const navRef = useRef<HTMLDivElement>(null);
 
