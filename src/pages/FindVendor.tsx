@@ -15,9 +15,10 @@ import {
 } from "@/components/ui/select";
 
 const LOCATIONS = [
-  "undercaf",
-  "market café (uppercaf)",
-  "lomo caf",
+  "undercafé",
+  "market café (upper café)",
+  "lomo café",
+  "misc. location"
 ];
 
 const FindVendor = () => {

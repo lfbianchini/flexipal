@@ -5,6 +5,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
+// Temporary mock data for testing
+const MOCK_CONVERSATIONS = Array.from({ length: 20 }, (_, i) => ({
+  id: `mock-${i}`,
+  profile: {
+    full_name: `Test User ${i + 1}`,
+    avatar_url: null
+  },
+  last_message: `This is test message ${i + 1} to check scrolling behavior`,
+  created_at: new Date().toISOString()
+}));
+
 export default function ChatPage() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
@@ -24,12 +35,26 @@ export default function ChatPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [showLoadingSpinner, setShowLoadingSpinner] = useState(true);
+  const subscriptionRef = useRef<any>(null);
+  const previousConversationId = useRef<string | undefined>(conversationId);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  const scrollToBottom = () => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: loading ? "auto" : "smooth" });
+  // Initial load of messages when accessing URL directly
+  useEffect(() => {
+    if (conversationId && isInitialLoad) {
+      loadMessages(conversationId);
+      setIsInitialLoad(false);
     }
-  };
+  }, [conversationId, loadMessages, isInitialLoad]);
+
+  // Reset messages when switching conversations
+  useEffect(() => {
+    if (!isInitialLoad && conversationId !== previousConversationId.current) {
+      setMessages([]);
+      loadMessages(conversationId);
+      previousConversationId.current = conversationId;
+    }
+  }, [conversationId, setMessages, loadMessages, isInitialLoad]);
 
   // Handle loading timeout
   useEffect(() => {
@@ -54,7 +79,10 @@ export default function ChatPage() {
   useEffect(() => {
     if (!conversationId) return;
     
-    loadMessages(conversationId);
+    // Prevent duplicate subscriptions
+    if (subscriptionRef.current) {
+      supabase.removeChannel(subscriptionRef.current);
+    }
    
     const messageSubscription = supabase
       .channel(`messages:${conversationId}`)
@@ -67,15 +95,28 @@ export default function ChatPage() {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload: any) => {
-          setMessages(prev => [...prev, payload.new as Message]);
+          const isNewMessage = !messages.some(msg => msg.id === payload.new.id);
+          if (isNewMessage) {
+            setMessages(prev => [...prev, payload.new as Message]);
+          }
         }
       )
       .subscribe();
 
+    subscriptionRef.current = messageSubscription;
+
     return () => {
-      supabase.removeChannel(messageSubscription);
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+      }
     };
-  }, [conversationId]);
+  }, [conversationId, messages, setMessages]);
+
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: loading ? "auto" : "smooth" });
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -97,15 +138,17 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="w-full flex flex-col md:flex-row max-w-4xl mx-auto bg-white/50 backdrop-blur-sm rounded-t-2xl md:rounded-xl shadow-sm hover:shadow-md transition-all border border-white mt-2 md:mt-8 animate-fade-in min-h-[440px] overflow-hidden">
-      {/* Chat list */}
-      <aside className="bg-white/90 md:w-80 w-full md:min-h-[440px] border-r border-white flex-shrink-0 flex flex-col shadow-[1px_0_0_0_rgba(255,255,255,0.8)] md:mr-[1px]">
-        <div className="py-3 px-4 border-b border-white sticky top-0 z-10 bg-white/95 backdrop-blur-sm shadow-sm">
+    <div className="w-full flex flex-col md:flex-row max-w-4xl mx-auto bg-white/50 backdrop-blur-sm rounded-t-2xl md:rounded-xl shadow-sm hover:shadow-md transition-all border border-white mt-2 md:mt-8 animate-fade-in h-[440px] md:h-[550px] overflow-hidden">
+      {/* Chat list - Hide on mobile when conversation is selected */}
+      <aside className={`bg-white/90 md:w-80 w-full h-full border-r border-white flex-shrink-0 flex flex-col shadow-[1px_0_0_0_rgba(255,255,255,0.8)] md:mr-[1px] overflow-hidden ${
+        conversationId ? 'hidden md:flex' : 'flex'
+      }`}>
+        <div className="py-3 px-4 border-b border-white/20 sticky top-0 z-10 bg-white shadow-[0_4px_15px_-3px_rgba(0,0,0,0.05)] backdrop-blur-sm">
           <h2 className="font-semibold text-base md:text-lg text-usfgreen flex gap-2 items-center">
             <MessageCircle size={20} className="inline-block text-usfgold" /> Chats
           </h2>
         </div>
-        <div className="flex-1 overflow-y-auto max-h-[44vh] md:max-h-[450px] pb-2 bg-gradient-to-b from-white/50 to-transparent">
+        <div className="flex-1 overflow-y-auto overscroll-contain pb-2 bg-gradient-to-b from-white/50 to-transparent">
           <div className="flex flex-col gap-1.5 p-2">
             {loading && showLoadingSpinner && !conversations.length ? (
               <div className="flex justify-center items-center h-32">
@@ -129,7 +172,7 @@ export default function ChatPage() {
                   }`}
                 >
                   <img 
-                    src={chat.profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.profile?.full_name || 'User')}`} 
+                    src={chat.profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat.profile?.full_name || 'User')}&background=ABECD6&color=155D31`} 
                     alt={chat.profile?.full_name} 
                     className={`w-10 h-10 rounded-full object-cover flex-shrink-0 transition shadow-sm ${
                       conversationId === chat.id
@@ -153,24 +196,35 @@ export default function ChatPage() {
             )}
           </div>
         </div>
+        <div className="h-1 bg-gradient-to-b from-white/50 to-transparent md:hidden"></div>
       </aside>
 
-      {/* Chat conversation or welcome screen */}
-      <section className="flex-1 min-w-0 min-h-[300px] flex flex-col bg-gradient-to-br from-white/80 via-white/60 to-white/70 relative">
+      {/* Chat conversation or welcome screen - Show on mobile when conversation is selected */}
+      <section className={`flex-1 min-w-0 flex flex-col bg-gradient-to-br from-white/80 via-white/60 to-white/70 relative h-full overflow-hidden ${
+        conversationId ? 'flex' : 'hidden md:flex'
+      }`}>
         {conversationId ? (
           <>
             {/* Chat header (mobile only) */}
-            <div className="flex md:hidden items-center gap-3 border-b border-white px-4 py-3 sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-sm mb-[1px]">
+            <div className="flex md:hidden items-center gap-3 border-b border-white/20 px-4 py-3 sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-[0_4px_15px_-3px_rgba(0,0,0,0.05)]">
+              <button 
+                onClick={() => navigate('/chat')} 
+                className="p-1 hover:bg-white/80 rounded-lg transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-usfgreen" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </button>
               {(() => {
                 const chat = conversations.find(c => c.id === conversationId);
                 return (
                   <>
                     <img 
-                      src={chat?.profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat?.profile?.full_name || 'User')}`}
+                      src={chat?.profile?.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(chat?.profile?.full_name || 'User')}&background=ABECD6&color=155D31`}
                       className="w-9 h-9 rounded-full ring-2 ring-white object-cover shadow-sm"
                       alt={chat?.profile?.full_name}
                     />
-                    <div className="bg-white/80 px-3 py-1.5 rounded-lg border border-white/50">
+                    <div className="bg-white/80 px-3 py-1.5 rounded-lg border border-white/50 shadow-sm">
                       <div className="font-semibold text-usfgreen text-sm">{chat?.profile?.full_name}</div>
                     </div>
                   </>
@@ -179,7 +233,7 @@ export default function ChatPage() {
             </div>
 
             {/* Messages scroll area */}
-            <div className="px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 flex-1 w-full max-w-full overflow-y-auto max-h-[44vh] md:max-h-[450px] min-h-[250px] md:min-h-[300px] relative">
+            <div className="flex-1 px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 overflow-y-auto">
               {loading && showLoadingSpinner ? (
                 <div className="flex justify-center items-center h-32">
                   <Loader2 className="h-8 w-8 text-usfgreen animate-spin" />
@@ -224,20 +278,20 @@ export default function ChatPage() {
             </div>
 
             {/* Send bar */}
-            <form onSubmit={handleSendMessage} className="px-2 md:px-6 pt-3 md:pt-4 pb-4 bg-white backdrop-blur-sm border-t border-white shadow-[0_-1px_2px_0_rgba(255,255,255,0.5)] mt-[1px]">
+            <form onSubmit={handleSendMessage} className="flex-shrink-0 px-2 md:px-6 pt-3 md:pt-4 pb-4 bg-white backdrop-blur-sm border-t border-white/20 shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)]">
               <div className="flex gap-2.5">
                 <input
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   placeholder="Type a message…"
-                  className="flex-1 px-4 py-2 rounded-xl border border-white bg-white/95 text-sm focus:outline-none focus:ring-2 focus:ring-usfgold transition-all hover:border-white/40 shadow-sm"
+                  className="flex-1 px-4 py-2 rounded-xl border border-white/50 bg-white/95 text-sm focus:outline-none focus:ring-2 focus:ring-usfgold transition-all hover:border-white shadow-sm"
                   maxLength={1000}
                   style={{ fontSize: '16px' }}
                 />
                 <button
                   type="submit"
                   disabled={!messageInput.trim() && !selectedFile}
-                  className="p-2 text-usfgreen disabled:text-gray-300 hover:bg-white/90 rounded-lg transition flex-shrink-0 disabled:hover:bg-transparent border border-white/20 hover:border-white disabled:border-transparent"
+                  className="p-2 text-usfgreen disabled:text-gray-300 hover:bg-white/90 rounded-lg transition flex-shrink-0 disabled:hover:bg-transparent border border-white/50 hover:border-white disabled:border-transparent shadow-sm"
                   aria-label="Send message"
                 >
                   <Send size={20} />

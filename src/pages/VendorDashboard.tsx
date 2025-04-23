@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { toast } from "@/hooks/use-toast";
 import { useVendorStatus } from "@/hooks/useVendorStatus";
-import { Switch } from "@/components/ui/switch";
 import { MapPin, Play, StopCircle, Clock, Sparkles } from "lucide-react";
 import { 
   Select,
@@ -12,11 +11,13 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
 
 const LOCATIONS = [
-  "undercaf",
-  "market café (uppercaf)",
-  "lomo caf",
+  "undercafé",
+  "market café (upper café)",
+  "lomo café",
+  "misc. location"
 ];
 
 const VendorDashboard = () => {
@@ -32,6 +33,32 @@ const VendorDashboard = () => {
     }
   }, [status]);
 
+  // Check for expiration every minute
+  useEffect(() => {
+    if (!status?.is_live || !status?.end_time) return;
+
+    const checkExpiration = async () => {
+      const endTime = new Date(status.end_time);
+      if (endTime <= new Date()) {
+        const { error } = await supabase
+          .from('vendor_status')
+          .update({ is_live: false })
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id);
+
+        if (!error) {
+          window.location.reload();
+        }
+      }
+    };
+
+    // Check immediately
+    checkExpiration();
+
+    // Then check every minute
+    const interval = setInterval(checkExpiration, 60000);
+    return () => clearInterval(interval);
+  }, [status?.is_live, status?.end_time]);
+
   const handleGoLive = async () => {
     const endTimeDate = new Date();
     let hours = 1;
@@ -39,7 +66,7 @@ const VendorDashboard = () => {
     if (endTime === "30 minutes") hours = 0.5;
     if (endTime === "2 hours") hours = 2;
     if (endTime === "3 hours") hours = 3;
-    
+
     endTimeDate.setHours(endTimeDate.getHours() + hours);
 
     const { error } = await goLive(location, note || null, endTimeDate);
@@ -163,7 +190,7 @@ const VendorDashboard = () => {
             value={note}
             onChange={e => setNote(e.target.value)}
             placeholder="e.g. 'No sushi available today'"
-            className="rounded-lg border-white/20 bg-white/95 focus:ring-2 focus:ring-usfgold transition-all hover:border-white/40 shadow-sm"
+            className="rounded-lg border-white/20 resize-none bg-white/95 focus:ring-2 focus:ring-usfgold transition-all hover:border-white/40 shadow-sm"
             maxLength={60}
             disabled={isLive}
           />

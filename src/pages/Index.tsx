@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Sparkles, Heart, Leaf, Star, ChevronDown, HelpCircle } from "lucide-react";
+import { Sparkles, Heart, Leaf, Star, ChevronDown, HelpCircle, Instagram } from "lucide-react";
 import { useState } from "react";
 
 type FAQItem = {
@@ -126,11 +126,36 @@ const Index = () => {
           </div>
         </div>
 
+                {/* Social Media Section */}
+                <div className="w-full relative">
+          <div className="flex flex-col items-center gap-3">
+            <h2 className="text-xl font-bold text-usfgreen flex items-center gap-2">
+              Check us out!
+            </h2>
+            <a
+              href="https://instagram.com/flexi_pal"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-usfgold/20 to-usfgreen/20 hover:from-usfgold/30 hover:to-usfgreen/30 transition-all duration-300 text-usfgreen font-medium shadow-sm border border-white/50"
+            >
+              <Instagram className="text-usfgold group-hover:scale-110 transition-transform" size={20} />
+              <span className="group-hover:text-usfgreen-light transition-colors">@flexi_pal</span>
+            </a>
+          </div>
+        </div>
+
         {/* Friendly sign-off or bottom icon */}
         <span className="pt-5 text-usfgreen/60 text-xs flex items-center gap-1 tracking-wide z-10">
           <span>made with</span>
           <Heart className="text-[#FF4477]" size={15} />
-          <span>by luca bianchini</span>
+          <a 
+            href="https://www.linkedin.com/in/luca-bianchini-650923288/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="hover:text-usfgreen transition-colors duration-200 hover:underline decoration-usfgold/50 underline-offset-2"
+          >
+            <span>by luca bianchini</span>
+          </a>
         </span>
         <div className="absolute -bottom-8 -left-8 w-24 h-24 bg-gradient-to-br from-usfgold/40 via-[#fbed96] to-[#abecd6]/70 rounded-full blur-2xl opacity-80 pointer-events-none"></div>
         <div className="absolute -top-8 -right-10 w-24 h-24 bg-gradient-to-br from-[#abecd6]/50 via-[#e5deff]/70 to-usfgold/40 rounded-full blur-2xl opacity-80 pointer-events-none"></div>

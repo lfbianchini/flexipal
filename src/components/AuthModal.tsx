@@ -41,6 +41,7 @@ export default function AuthModal({ open, mode, onClose }: AuthModalProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSignupSuccess(false);
 
     if (!EMAIL_REGEX.test(email)) {
       setError("Only @dons.usfca.edu emails are allowed.");
@@ -48,23 +49,35 @@ export default function AuthModal({ open, mode, onClose }: AuthModalProps) {
     }
 
     setLoading(true);
-    if (mode === "signup") {
-      const { error } = await signUp(email, password, name);
-      if (error) {
-        setError(error.message);
-      } else {
+    try {
+      if (mode === "signup") {
+        const { data, error } = await signUp(email, password, name);
+        
+        if (error) {
+          setError(error.message);
+          return;
+        }
+
+        if (!data?.user) {
+          setError("Failed to create account. Please try again.");
+          return;
+        }
+
         setSignupSuccess(true);
-      }
-    } else {
-      const { error } = await signIn(email, password);
-      if (error) {
-        setError(error.message);
       } else {
-        toast({ title: "Login successful" });
-        handleClose();
+        const { error } = await signIn(email, password);
+        if (error) {
+          setError(error.message);
+        } else {
+          toast({ title: "Login successful" });
+          handleClose();
+        }
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (

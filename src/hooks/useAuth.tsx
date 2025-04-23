@@ -61,20 +61,51 @@ export function useAuth() {
   // Auth helpers
   const signUp = useCallback(
     async (email: string, password: string, full_name: string) => {
-      const seed = encodeURIComponent(full_name);
-      const avatarUrl = `https://api.dicebear.com/9.x/glass/svg?seed=${seed}`
-
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name,
-            avatar_url: avatarUrl
-          }
+      try {
+        const { data: existing, error: checkErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+        if (existing) {
+          return {
+            data: null,
+            error: { message: 'An account with this email already exists.' }
+          };
         }
-      });
-      return { data, error };
+
+        const seed = encodeURIComponent(full_name);
+        const avatarUrl = `https://api.dicebear.com/9.x/glass/svg?seed=${seed}`;
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name,
+              avatar_url: avatarUrl
+            }
+          }
+        });
+        if (error) {
+          return { data: null, error };
+        }
+
+        // If signup was successful but no user was returned, it means something went wrong
+        if (!data.user) {
+          return {
+            data: null,
+            error: { message: 'Failed to create account. Please try again.' }
+          };
+        }
+
+        return { data, error: null };
+      } catch (err) {
+        return {
+          data: null,
+          error: { message: 'An unexpected error occurred. Please try again.' }
+        };
+      }
     },
     []
   );
