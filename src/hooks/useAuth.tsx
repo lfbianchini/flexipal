@@ -5,28 +5,44 @@ import { useAuthStore } from "@/lib/store";
 export type { Profile, AuthUser } from "@/lib/store";
 
 export function useAuth() {
-  const store = useAuthStore();
+  const {
+    user,
+    profile,
+    isAdmin,
+    loading,
+    initialized,
+    initialize,
+    setUser,
+    setProfile,
+    setIsAdmin,
+    signOut,
+    refreshProfile
+  } = useAuthStore();
 
   useEffect(() => {
     // Initialize auth state if not already done
-    if (!store.initialized) {
-      store.initialize();
+    if (!initialized) {
+      initialize();
     }
-
     // Listen for auth events
     const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
-        store.setUser(null);
-        store.setProfile(null);
-        store.setIsAdmin(false);
+        setUser(null);
+        setProfile(null);
+        setIsAdmin(false);
       } else if (session?.user) {
         const { id, email, email_confirmed_at } = session.user;
-        store.setUser({ id, email, email_confirmed_at });
+        setUser({ id, email, email_confirmed_at });
+
+        // Fetch profile data when user logs in
+        if (event === 'SIGNED_IN' && !initialized) {
+          refreshProfile();
+        }
       }
     });
 
     return () => listener?.subscription.unsubscribe();
-  }, []);
+  }, [initialized, initialize, setUser, setProfile, setIsAdmin]);
 
   const signUp = useCallback(
     async (email: string, password: string, full_name: string) => {
@@ -83,13 +99,13 @@ export function useAuth() {
   }, []);
 
   return {
-    user: store.user,
-    profile: store.profile,
-    isAdmin: store.isAdmin,
-    loading: store.loading,
+    user,
+    profile,
+    isAdmin,
+    loading,
     signUp,
     signIn,
-    signOut: store.signOut,
-    refreshProfile: store.refreshProfile
+    signOut,
+    refreshProfile
   };
 }

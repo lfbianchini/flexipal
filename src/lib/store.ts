@@ -43,7 +43,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
-    set({ user: null, profile: null, isAdmin: false });
+    set({ user: null, profile: null, isAdmin: false, initialized: false });
   },
 
   refreshProfile: async () => {
@@ -87,9 +87,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             .select("*")
             .eq("user_id", id)
         ]);
+        
 
         if (profileResult.data && JSON.stringify(profile) !== JSON.stringify(profileResult.data)) {
           setProfile(profileResult.data);
+          set({ profile: profileResult.data });
         }
         
         const newIsAdmin = rolesResult.data?.some((r: any) => r.role === "admin") || false;

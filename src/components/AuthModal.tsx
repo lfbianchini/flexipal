@@ -69,7 +69,7 @@ export default function AuthModal({ open, mode, onClose }: AuthModalProps) {
         if (error) {
           setError(error.message);
         } else {
-          toast({ title: "Login successful" });
+          window.location.reload();
           handleClose();
         }
       }
