@@ -39,6 +39,11 @@ export default function ChatPage() {
   const previousConversationId = useRef<string | undefined>(conversationId);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+  // Scroll to top when component mounts or conversationId changes
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [conversationId]);
+
   // Initial load of messages when accessing URL directly
   useEffect(() => {
     if (conversationId && isInitialLoad) {
@@ -299,6 +304,12 @@ export default function ChatPage() {
                 <input
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
+                  onBlur={() => {
+                    // Add a small delay to ensure the keyboard is fully dismissed
+                    setTimeout(() => {
+                      scrollToBottom();
+                    }, 100);
+                  }}
                   placeholder="Type a message…"
                   className="flex-1 px-4 py-2 rounded-xl border border-white/50 bg-white/95 text-sm focus:outline-none focus:ring-2 focus:ring-usfgold transition-all hover:border-white shadow-sm"
                   maxLength={200}
