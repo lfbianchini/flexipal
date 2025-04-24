@@ -13,6 +13,7 @@ import AuthGuard from "./components/AuthGuard";
 import Index from "./pages/Index";
 import ConfirmPage from "./pages/ConfirmPage";
 import NotFound from "./pages/NotFound";
+import CommunityPage from "./pages/CommunityPage";
 
 const queryClient = new QueryClient();
 
@@ -62,6 +63,14 @@ const App = () => (
                   element={
                     <AuthGuard>
                       <VendorDashboard />
+                    </AuthGuard>
+                  }
+                />
+                <Route
+                  path="/community"
+                  element={
+                    <AuthGuard>
+                      <CommunityPage />
                     </AuthGuard>
                   }
                 />

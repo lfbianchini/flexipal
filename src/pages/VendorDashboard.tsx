@@ -194,6 +194,9 @@ const VendorDashboard = () => {
             maxLength={60}
             disabled={isLive}
           />
+          <div className="mt-1 text-xs text-gray-500">
+            {note.length}/60 characters
+          </div>
         </div>
         
         {isLive ? (

@@ -179,6 +179,47 @@ export type Database = {
           },
         ]
       }
+      community_posts: {
+        Row: {
+          id: string
+          created_at: string | null
+          user_id: string
+          role: "Buyer" | "Vendor"
+          title: string
+          details: string
+          availability_window: string | null
+          contact_info: string | null
+        }
+        Insert: {
+          id?: string
+          created_at?: string | null
+          user_id: string
+          role: "Buyer" | "Vendor"
+          title: string
+          details: string
+          availability_window?: string | null
+          contact_info?: string | null
+        }
+        Update: {
+          id?: string
+          created_at?: string | null
+          user_id?: string
+          role?: "Buyer" | "Vendor"
+          title?: string
+          details?: string
+          availability_window?: string | null
+          contact_info?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_posts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

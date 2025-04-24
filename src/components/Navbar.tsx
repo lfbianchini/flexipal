@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Home, User, Users, MessageCircle, MapPin, Menu } from "lucide-react";
+import { Home, User, Users, MessageCircle, MapPin, Menu, MessagesSquare } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useVendorStatus } from "@/hooks/useVendorStatus";
@@ -20,6 +20,7 @@ const truncateName = (name: string, maxLen = 18) => {
 const navItems = [
   { name: "Find Vendor", path: "/find", icon: MapPin, requireAuth: true },
   { name: "Vendor Dashboard", path: "/dashboard", icon: User, requireAuth: true },
+  { name: "Community", path: "/community", icon: MessagesSquare, requireAuth: true },
   { name: "Chat", path: "/chat", icon: MessageCircle, requireAuth: true },
 ];
 

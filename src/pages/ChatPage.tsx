@@ -49,9 +49,15 @@ export default function ChatPage() {
 
   // Reset messages when switching conversations
   useEffect(() => {
-    if (!isInitialLoad && conversationId !== previousConversationId.current) {
-      setMessages([]);
-      loadMessages(conversationId);
+    if (!isInitialLoad) {
+      if (conversationId) {
+        if (conversationId !== previousConversationId.current) {
+          setMessages([]);
+          loadMessages(conversationId);
+        }
+      } else {
+        setMessages([]); // Clear messages when no conversation is selected
+      }
       previousConversationId.current = conversationId;
     }
   }, [conversationId, setMessages, loadMessages, isInitialLoad]);
@@ -77,7 +83,13 @@ export default function ChatPage() {
 
   // Load messages and setup subscription
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId) {
+      if (subscriptionRef.current) {
+        supabase.removeChannel(subscriptionRef.current);
+        subscriptionRef.current = null;
+      }
+      return;
+    }
     
     // Prevent duplicate subscriptions
     if (subscriptionRef.current) {
@@ -114,7 +126,10 @@ export default function ChatPage() {
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: loading ? "auto" : "smooth" });
+      const messagesContainer = messagesEndRef.current.parentElement;
+      if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
     }
   };
 
@@ -138,7 +153,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="w-full flex flex-col md:flex-row max-w-4xl mx-auto bg-white/50 backdrop-blur-sm rounded-t-2xl md:rounded-xl shadow-sm hover:shadow-md transition-all border border-white mt-2 md:mt-8 animate-fade-in h-[440px] md:h-[550px] overflow-hidden">
+    <div className="w-full flex flex-col md:flex-row max-w-4xl mx-auto bg-white/50 backdrop-blur-sm rounded-t-2xl md:rounded-xl shadow-sm hover:shadow-md transition-all border border-white mt-2 md:mt-8 animate-fade-in h-[calc(100dvh-4.5rem)] md:h-[550px] overflow-hidden">
       {/* Chat list - Hide on mobile when conversation is selected */}
       <aside className={`bg-white/90 md:w-80 w-full h-full border-r border-white flex-shrink-0 flex flex-col shadow-[1px_0_0_0_rgba(255,255,255,0.8)] md:mr-[1px] overflow-hidden ${
         conversationId ? 'hidden md:flex' : 'flex'
@@ -206,7 +221,7 @@ export default function ChatPage() {
         {conversationId ? (
           <>
             {/* Chat header (mobile only) */}
-            <div className="flex md:hidden items-center gap-3 border-b border-white/20 px-4 py-3 sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-[0_4px_15px_-3px_rgba(0,0,0,0.05)]">
+            <div className="flex-shrink-0 flex md:hidden items-center gap-3 border-b border-white/20 px-4 py-3 sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-[0_4px_15px_-3px_rgba(0,0,0,0.05)]">
               <button 
                 onClick={() => navigate('/chat')} 
                 className="p-1 hover:bg-white/80 rounded-lg transition-colors"
@@ -233,7 +248,7 @@ export default function ChatPage() {
             </div>
 
             {/* Messages scroll area */}
-            <div className="flex-1 px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 overflow-y-auto">
+            <div className="flex-1 min-h-0 px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 overflow-y-auto overscroll-contain">
               {loading && showLoadingSpinner ? (
                 <div className="flex justify-center items-center h-32">
                   <Loader2 className="h-8 w-8 text-usfgreen animate-spin" />
@@ -245,6 +260,7 @@ export default function ChatPage() {
                 </div>
               ) : (
                 <>
+                  <div className="flex-1" /> {/* Spacer to push messages down */}
                   {messages.map((msg) => (
                     <div
                       key={msg.id}
@@ -272,7 +288,7 @@ export default function ChatPage() {
                       )}
                     </div>
                   ))}
-                  <div ref={messagesEndRef} />
+                  <div ref={messagesEndRef} className="h-0" />
                 </>
               )}
             </div>
@@ -285,8 +301,9 @@ export default function ChatPage() {
                   onChange={(e) => setMessageInput(e.target.value)}
                   placeholder="Type a message…"
                   className="flex-1 px-4 py-2 rounded-xl border border-white/50 bg-white/95 text-sm focus:outline-none focus:ring-2 focus:ring-usfgold transition-all hover:border-white shadow-sm"
-                  maxLength={1000}
+                  maxLength={200}
                   style={{ fontSize: '16px' }}
+                  enterKeyHint="send"
                 />
                 <button
                   type="submit"
@@ -296,6 +313,9 @@ export default function ChatPage() {
                 >
                   <Send size={20} />
                 </button>
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                {messageInput.length}/200 characters
               </div>
             </form>
           </>
