@@ -16,6 +16,36 @@ const MOCK_CONVERSATIONS = Array.from({ length: 20 }, (_, i) => ({
   created_at: new Date().toISOString()
 }));
 
+const formatMessageTime = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleString('en-US', { 
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: true 
+  }).toLowerCase();
+};
+
+const formatLastMessageTime = (dateString: string | null) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (diffInDays === 0) {
+    // Today, show time
+    return formatMessageTime(dateString);
+  } else if (diffInDays === 1) {
+    // Yesterday
+    return 'yesterday';
+  } else if (diffInDays < 7) {
+    // Within a week, show day name
+    return date.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase();
+  } else {
+    // More than a week ago, show date
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toLowerCase();
+  }
+};
+
 export default function ChatPage() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
@@ -233,13 +263,18 @@ export default function ChatPage() {
                     }`}
                   />
                   <div className="flex-1 text-left min-w-0">
-                    <div className="text-usfgreen text-sm truncate font-medium group-hover:text-usfgreen-light transition-colors">
-                      {chat.profile?.full_name?.length > 22
-                        ? chat.profile?.full_name?.slice(0, 20) + "…"
-                        : chat.profile?.full_name
-                      }
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="text-usfgreen text-sm truncate font-medium group-hover:text-usfgreen-light transition-colors">
+                        {chat.profile?.full_name?.length > 22
+                          ? chat.profile?.full_name?.slice(0, 20) + "…"
+                          : chat.profile?.full_name
+                        }
+                      </div>
+                      <div className="text-[10px] text-gray-400 whitespace-nowrap">
+                        {formatLastMessageTime(chat.last_message_at)}
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500 truncate max-w-[120px]">
+                    <div className="text-xs text-gray-500 truncate max-w-[180px]">
                       {chat.last_message || "No messages yet"}
                     </div>
                   </div>
@@ -326,6 +361,13 @@ export default function ChatPage() {
                           className="mt-2 rounded-lg max-w-full h-auto max-h-40 object-contain border border-white shadow-sm"
                         />
                       )}
+                      <span className={`text-[10px] mt-1 opacity-70 ${
+                        msg.sender_id === user?.id
+                          ? "text-white/80"
+                          : "text-gray-500"
+                      }`}>
+                        {formatMessageTime(msg.created_at)}
+                      </span>
                     </div>
                   ))}
                   <div ref={messagesEndRef} className="h-0" />
