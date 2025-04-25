@@ -38,6 +38,9 @@ export default function ChatPage() {
   const subscriptionRef = useRef<any>(null);
   const previousConversationId = useRef<string | undefined>(conversationId);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const lastScrollPosition = useRef(0);
 
   // Scroll to top when component mounts or conversationId changes
   useEffect(() => {
@@ -129,6 +132,35 @@ export default function ChatPage() {
     };
   }, [conversationId, messages, setMessages]);
 
+  // Save scroll position when keyboard appears
+  useEffect(() => {
+    const handleFocus = () => {
+      setIsKeyboardVisible(true);
+      if (messagesContainerRef.current) {
+        lastScrollPosition.current = messagesContainerRef.current.scrollTop;
+      }
+    };
+
+    // Restore scroll position when keyboard hides
+    const handleBlur = () => {
+      setIsKeyboardVisible(false);
+      setTimeout(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop = lastScrollPosition.current;
+        }
+      }, 100);
+    };
+
+    const input = document.querySelector('input[type="text"]');
+    input?.addEventListener('focus', handleFocus);
+    input?.addEventListener('blur', handleBlur);
+
+    return () => {
+      input?.removeEventListener('focus', handleFocus);
+      input?.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
       const messagesContainer = messagesEndRef.current.parentElement;
@@ -158,12 +190,12 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="w-full flex flex-col md:flex-row max-w-4xl mx-auto bg-white/50 backdrop-blur-sm rounded-t-2xl md:rounded-xl shadow-sm hover:shadow-md transition-all border border-white mt-2 md:mt-8 animate-fade-in h-[calc(100dvh-4.5rem)] md:h-[550px] overflow-hidden">
+    <div className="w-full flex flex-col md:flex-row max-w-4xl mx-auto bg-white/50 backdrop-blur-sm rounded-t-2xl md:rounded-xl shadow-sm hover:shadow-md transition-all border border-white mt-0 md:mt-4 animate-fade-in h-[calc(90dvh)] md:h-[550px] overflow-hidden">
       {/* Chat list - Hide on mobile when conversation is selected */}
       <aside className={`bg-white/90 md:w-80 w-full h-full border-r border-white flex-shrink-0 flex flex-col shadow-[1px_0_0_0_rgba(255,255,255,0.8)] md:mr-[1px] overflow-hidden ${
         conversationId ? 'hidden md:flex' : 'flex'
       }`}>
-        <div className="py-3 px-4 border-b border-white/20 sticky top-0 z-10 bg-white shadow-[0_4px_15px_-3px_rgba(0,0,0,0.05)] backdrop-blur-sm">
+        <div className="py-2 px-4 border-b border-white/20 sticky top-0 z-10 bg-white shadow-[0_4px_15px_-3px_rgba(0,0,0,0.05)] backdrop-blur-sm">
           <h2 className="font-semibold text-base md:text-lg text-usfgreen flex gap-2 items-center">
             <MessageCircle size={20} className="inline-block text-usfgold" /> Chats
           </h2>
@@ -226,7 +258,7 @@ export default function ChatPage() {
         {conversationId ? (
           <>
             {/* Chat header (mobile only) */}
-            <div className="flex-shrink-0 flex md:hidden items-center gap-3 border-b border-white/20 px-4 py-3 sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-[0_4px_15px_-3px_rgba(0,0,0,0.05)]">
+            <div className="flex-shrink-0 flex md:hidden items-center gap-3 border-b border-white/20 px-4 py-2 sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-[0_4px_15px_-3px_rgba(0,0,0,0.05)]">
               <button 
                 onClick={() => navigate('/chat')} 
                 className="p-1 hover:bg-white/80 rounded-lg transition-colors"
@@ -253,7 +285,10 @@ export default function ChatPage() {
             </div>
 
             {/* Messages scroll area */}
-            <div className="flex-1 min-h-0 px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 overflow-y-auto overscroll-contain">
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 min-h-0 px-2 py-3 md:px-6 md:py-6 flex flex-col overflow-x-hidden gap-3 overflow-y-auto overscroll-contain"
+            >
               {loading && showLoadingSpinner ? (
                 <div className="flex justify-center items-center h-32">
                   <Loader2 className="h-8 w-8 text-usfgreen animate-spin" />
@@ -304,11 +339,19 @@ export default function ChatPage() {
                 <input
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
+                  onFocus={() => {
+                    // Save current scroll position when keyboard appears
+                    if (window.innerWidth < 1024) { // Only on mobile/tablet
+                      lastScrollPosition.current = window.scrollY;
+                    }
+                  }}
                   onBlur={() => {
-                    // Add a small delay to ensure the keyboard is fully dismissed
-                    setTimeout(() => {
-                      scrollToBottom();
-                    }, 100);
+                    // Scroll to top when keyboard is dismissed on mobile
+                    if (window.innerWidth < 1024) { // Only on mobile/tablet
+                      setTimeout(() => {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }, 100);
+                    }
                   }}
                   placeholder="Type a message…"
                   className="flex-1 px-4 py-2 rounded-xl border border-white/50 bg-white/95 text-sm focus:outline-none focus:ring-2 focus:ring-usfgold transition-all hover:border-white shadow-sm"

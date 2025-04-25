@@ -71,7 +71,12 @@ export function useVendors() {
     };
   }, []);
 
-  const getVendorsByLocation = (location: string) => {
+  const getVendorsByLocation = async (location: string) => {
+    // simulate a loading delay
+    setLoading(true);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    setLoading(false);
+    console.log(vendors, location)
     return vendors.filter(vendor => 
       vendor.is_live && 
       vendor.location === location &&
