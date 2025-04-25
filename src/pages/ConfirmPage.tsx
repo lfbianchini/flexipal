@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle2, XCircle, Home, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+
 export default function ConfirmPage() {
   const navigate = useNavigate();
   const { refreshProfile } = useAuth();
@@ -15,6 +16,7 @@ export default function ConfirmPage() {
   const [resendStatus, setResendStatus] = useState<"idle" | "success" | "error">("idle");
   const [resendError, setResendError] = useState<string | null>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const lastScrollPosition = useRef(0);
 
   useEffect(() => {
     // Countdown timer for resend cooldown
@@ -137,124 +139,152 @@ export default function ConfirmPage() {
     }
   };
 
+  const handleInputFocus = () => {
+    // Save current scroll position when keyboard appears
+    if (window.innerWidth < 1024) { // Only on mobile/tablet
+      lastScrollPosition.current = window.scrollY;
+    }
+  };
+
+  const handleInputBlur = () => {
+    // Scroll to top when keyboard is dismissed on mobile
+    if (window.innerWidth < 1024) { // Only on mobile/tablet
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+    }
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-70px)] p-4 bg-gradient-to-br from-[#fbed96] via-[#E5DEFF] to-[#abecd6] animate-fade-in">
-      <div className="max-w-md w-full bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border-2 border-white p-8 flex flex-col items-center gap-6">
-        {status === "input" && (
-          <>
-            <div className="w-16 h-16 bg-usfgreen/10 rounded-full flex items-center justify-center">
-              <Mail className="w-8 h-8 text-usfgreen" />
-            </div>
-            <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold text-usfgreen">Enter Verification Code</h1>
-              <p className="text-gray-600">Please enter the 6-digit code sent to your email.</p>
-              <p className="text-sm text-gray-500">{searchParams.get("email")}</p>
-            </div>
-            <div className="flex gap-2 justify-center my-4">
-              {[0, 1, 2, 3, 4, 5].map((index) => (
-                <input
-                  key={index}
-                  ref={(el) => (inputRefs.current[index] = el)}
-                  type="text"
-                  maxLength={1}
-                  value={code[index]}
-                  onChange={(e) => handleInputChange(index, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(index, e)}
-                  onPaste={handlePaste}
-                  className="w-12 h-14 text-center text-xl font-semibold border-2 rounded-lg focus:border-usfgreen focus:outline-none transition-colors bg-white/50"
-                  autoFocus={index === 0}
-                />
-              ))}
-            </div>
-            <div className="flex flex-col items-center gap-2">
-              <button
-                onClick={handleResendCode}
-                disabled={resendCooldown > 0}
-                className={`text-sm ${
-                  resendCooldown > 0
-                    ? "text-gray-400 cursor-not-allowed"
-                    : "text-usfgreen hover:underline"
-                }`}
+    <div className="h-screen bg-gradient-to-br from-[#fbed96] via-[#E5DEFF] to-[#abecd6] overflow-hidden">
+      <div className="h-full flex flex-col items-center justify-start md:justify-center p-4">
+        <div className="max-w-md w-full bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border-2 border-white p-8 flex flex-col items-center gap-6 mt-8 md:mt-0">
+          {status === "input" && (
+            <>
+              <div className="w-16 h-16 bg-usfgreen/10 rounded-full flex items-center justify-center">
+                <Mail className="w-8 h-8 text-usfgreen" />
+              </div>
+              <div className="text-center space-y-2">
+                <h1 className="text-2xl font-bold text-usfgreen">Enter Verification Code</h1>
+                <p className="text-gray-600">Please enter the 6-digit code sent to your email.</p>
+                <p className="text-sm text-gray-500">{searchParams.get("email")}</p>
+              </div>
+              <div className="flex gap-2 justify-center my-4">
+                {[0, 1, 2, 3, 4, 5].map((index) => (
+                  <input
+                    key={index}
+                    ref={(el) => (inputRefs.current[index] = el)}
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={1}
+                    value={code[index]}
+                    onChange={(e) => handleInputChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    onPaste={handlePaste}
+                    onFocus={handleInputFocus}
+                    onBlur={handleInputBlur}
+                    className="w-12 h-14 text-center text-xl font-semibold border-2 rounded-lg focus:border-usfgreen focus:outline-none transition-colors bg-white/50"
+                    autoFocus={index === 0}
+                    style={{ fontSize: '16px' }}
+                  />
+                ))}
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  onClick={handleResendCode}
+                  disabled={resendCooldown > 0}
+                  className={`text-sm ${
+                    resendCooldown > 0
+                      ? "text-gray-400 cursor-not-allowed"
+                      : "text-usfgreen hover:underline"
+                  }`}
+                >
+                  {resendCooldown > 0
+                    ? `Resend code in ${resendCooldown}s`
+                    : "Didn't receive the code? Resend"}
+                </button>
+                {resendStatus === "success" && (
+                  <p className="text-sm text-usfgreen flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" />
+                    New code sent to your email
+                  </p>
+                )}
+                {resendStatus === "error" && (
+                  <p className="text-sm text-red-500 flex items-center gap-1">
+                    <XCircle className="w-4 h-4" />
+                    {resendError}
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
+          {status === "loading" && (
+            <>
+              <div className="w-16 h-16 bg-usfgreen/10 rounded-full flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-usfgreen animate-spin" />
+              </div>
+              <div className="text-center space-y-2">
+                <h1 className="text-2xl font-bold text-usfgreen">Verifying Code</h1>
+                <p className="text-gray-600">Please wait while we verify your code...</p>
+              </div>
+            </>
+          )}
+
+          {status === "success" && (
+            <>
+              <div className="w-16 h-16 bg-usfgreen/10 rounded-full flex items-center justify-center">
+                <CheckCircle2 className="w-8 h-8 text-usfgreen" />
+              </div>
+              <div className="text-center space-y-2">
+                <h1 className="text-2xl font-bold text-usfgreen">Email Verified!</h1>
+                <p className="text-gray-600">Your email has been successfully verified.</p>
+                <p className="text-sm text-gray-500">Welcome to FlexiPal!</p>
+              </div>
+              <Button 
+                onClick={handleContinue}
+                className="bg-usfgreen hover:bg-usfgreen-light text-white shadow-sm transition-all active:bg-usfgreen/90"
               >
-                {resendCooldown > 0
-                  ? `Resend code in ${resendCooldown}s`
-                  : "Didn't receive the code? Resend"}
-              </button>
-              {resendStatus === "success" && (
-                <p className="text-sm text-usfgreen flex items-center gap-1">
-                  <CheckCircle2 className="w-4 h-4" />
-                  New code sent to your email
-                </p>
-              )}
-              {resendStatus === "error" && (
-                <p className="text-sm text-red-500 flex items-center gap-1">
-                  <XCircle className="w-4 h-4" />
-                  {resendError}
-                </p>
-              )}
-            </div>
-          </>
-        )}
+                <Home size={18} /> 
+                Continue to Home
+              </Button>
+            </>
+          )}
 
-        {status === "loading" && (
-          <>
-            <div className="w-16 h-16 bg-usfgreen/10 rounded-full flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-usfgreen animate-spin" />
-            </div>
-            <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold text-usfgreen">Verifying Code</h1>
-              <p className="text-gray-600">Please wait while we verify your code...</p>
-            </div>
-          </>
-        )}
-
-        {status === "success" && (
-          <>
-            <div className="w-16 h-16 bg-usfgreen/10 rounded-full flex items-center justify-center">
-              <CheckCircle2 className="w-8 h-8 text-usfgreen" />
-            </div>
-            <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold text-usfgreen">Email Verified!</h1>
-              <p className="text-gray-600">Your email has been successfully verified.</p>
-              <p className="text-sm text-gray-500">Welcome to FlexiPal!</p>
-            </div>
-            <Button 
-              onClick={handleContinue}
-              className="bg-usfgreen hover:bg-usfgreen-light text-white shadow-sm transition-all active:bg-usfgreen/90"
-            >
-              <Home size={18} /> 
-              Continue to Home
-            </Button>
-          </>
-        )}
-
-        {status === "error" && (
-          <>
-            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
-              <XCircle className="w-8 h-8 text-red-500" />
-            </div>
-            <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold text-red-600">Verification Failed</h1>
-              <p className="text-gray-600">{error || "Invalid verification code. Please try again."}</p>
-            </div>
-            <div className="flex gap-2 justify-center my-4">
-              {[0, 1, 2, 3, 4, 5].map((index) => (
-                <input
-                  key={index}
-                  ref={(el) => (inputRefs.current[index] = el)}
-                  type="text"
-                  maxLength={1}
-                  value={code[index]}
-                  onChange={(e) => handleInputChange(index, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(index, e)}
-                  onPaste={handlePaste}
-                  className="w-12 h-14 text-center text-xl font-semibold border-2 rounded-lg focus:border-usfgreen focus:outline-none transition-colors bg-white/50 border-red-200"
-                  autoFocus={index === 0}
-                />
-              ))}
-            </div>
-          </>
-        )}
+          {status === "error" && (
+            <>
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center">
+                <XCircle className="w-8 h-8 text-red-500" />
+              </div>
+              <div className="text-center space-y-2">
+                <h1 className="text-2xl font-bold text-red-600">Verification Failed</h1>
+                <p className="text-gray-600">{error || "Invalid verification code. Please try again."}</p>
+              </div>
+              <div className="flex gap-2 justify-center my-4">
+                {[0, 1, 2, 3, 4, 5].map((index) => (
+                  <input
+                    key={index}
+                    ref={(el) => (inputRefs.current[index] = el)}
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={1}
+                    value={code[index]}
+                    onChange={(e) => handleInputChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    onPaste={handlePaste}
+                    onFocus={handleInputFocus}
+                    onBlur={handleInputBlur}
+                    className="w-12 h-14 text-center text-xl font-semibold border-2 rounded-lg focus:border-usfgreen focus:outline-none transition-colors bg-white/50 border-red-200"
+                    autoFocus={index === 0}
+                    style={{ fontSize: '16px' }}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
