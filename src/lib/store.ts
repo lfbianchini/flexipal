@@ -5,7 +5,6 @@ export type Profile = {
   id: string;
   full_name: string;
   avatar_url: string;
-  email: string;
 };
 
 export type AuthUser = {
@@ -42,8 +41,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setLoading: (loading) => set({ loading }),
 
   signOut: async () => {
-    await supabase.auth.signOut();
-    set({ user: null, profile: null, isAdmin: false, initialized: false });
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Error during sign out:', error);
+      // Force clear local session even if Supabase call fails
+    } finally {
+      // Always clear local state
+      set({ user: null, profile: null, isAdmin: false, initialized: false });
+    }
   },
 
   refreshProfile: async () => {
@@ -52,7 +58,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const { data: prof } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id, full_name, avatar_url")
       .eq("id", user.id)
       .maybeSingle();
     
@@ -79,7 +85,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const [profileResult, rolesResult] = await Promise.all([
           supabase
             .from("profiles")
-            .select("*")
+            .select("id, full_name, avatar_url")
             .eq("id", id)
             .maybeSingle(),
           supabase

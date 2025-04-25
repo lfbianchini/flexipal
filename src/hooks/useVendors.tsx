@@ -37,6 +37,11 @@ export function useVendors() {
         .eq('is_live', true)
         .order('last_active', { ascending: false });
 
+      console.log(data)
+      if (error) {
+        console.error('Error fetching vendors:', error);
+      }
+
       if (!error && data) {
         setVendors(data as unknown as Vendor[]);
       }
@@ -76,7 +81,6 @@ export function useVendors() {
     setLoading(true);
     await new Promise(resolve => setTimeout(resolve, 200));
     setLoading(false);
-    console.log(vendors, location)
     return vendors.filter(vendor => 
       vendor.is_live && 
       vendor.location === location &&

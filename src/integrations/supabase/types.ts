@@ -222,7 +222,13 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_profiles: {
+        Row: {
+          id: string
+          full_name: string
+          avatar_url: string
+        }
+      }
     }
     Functions: {
       is_admin: {

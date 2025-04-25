@@ -19,6 +19,7 @@ export type Conversation = {
   last_message: string | null;
   last_message_at: string | null;
   profile: {
+    id: string;
     full_name: string;
     avatar_url: string;
   } | null;
@@ -51,7 +52,7 @@ export function useChat() {
 
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, full_name, avatar_url')
           .in('id', otherUserIds);
 
         // Transform data to show the other participant's profile
