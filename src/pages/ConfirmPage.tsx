@@ -3,9 +3,10 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle2, XCircle, Home, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
+import { useAuth } from "@/hooks/useAuth";
 export default function ConfirmPage() {
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<"input" | "loading" | "success" | "error">("input");
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +83,10 @@ export default function ConfirmPage() {
     }
   };
 
+  const handleContinue = () => {
+    navigate("/");
+  };
+
   const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const pastedData = e.clipboardData.getData("text").trim();
@@ -120,6 +125,7 @@ export default function ConfirmPage() {
       }
 
       setStatus("success");
+      refreshProfile();
     } catch (err: any) {
       console.error("Verification error:", err);
       setError(err.message || "Failed to verify email");
@@ -213,7 +219,7 @@ export default function ConfirmPage() {
               <p className="text-sm text-gray-500">Welcome to FlexiPal!</p>
             </div>
             <Button 
-              onClick={() => navigate("/")}
+              onClick={handleContinue}
               className="bg-usfgreen hover:bg-usfgreen-light text-white shadow-sm transition-all active:bg-usfgreen/90"
             >
               <Home size={18} /> 
