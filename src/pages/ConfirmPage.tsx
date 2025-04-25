@@ -1,39 +1,118 @@
-import { useEffect, useState } from "react";
+import { useState, useRef, KeyboardEvent, ClipboardEvent, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle2, XCircle, Home, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function ConfirmPage() {
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<"pending" | "loading" | "success" | "error">("pending");
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState<"input" | "loading" | "success" | "error">("input");
   const [error, setError] = useState<string | null>(null);
+  const [code, setCode] = useState<string[]>(Array(6).fill(""));
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendStatus, setResendStatus] = useState<"idle" | "success" | "error">("idle");
+  const [resendError, setResendError] = useState<string | null>(null);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  const confirmEmail = async () => {
+  useEffect(() => {
+    // Countdown timer for resend cooldown
+    const timer = setInterval(() => {
+      setResendCooldown(prev => {
+        const newValue = Math.max(0, prev - 1);
+        if (newValue === 0) {
+          // Clear resend status when cooldown ends
+          setResendStatus("idle");
+          setResendError(null);
+        }
+        return newValue;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleResendCode = async () => {
+    try {
+      const email = searchParams.get("email");
+      if (!email) {
+        throw new Error("Email address not found");
+      }
+
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email,
+      });
+
+      if (error) throw error;
+
+      // Set cooldown to 60 seconds
+      setResendCooldown(60);
+      setResendStatus("success");
+      setResendError(null);
+    } catch (err: any) {
+      setResendStatus("error");
+      setResendError(err.message || "Failed to resend code");
+    }
+  };
+
+  const handleInputChange = (index: number, value: string) => {
+    // Only allow numbers
+    if (!/^\d*$/.test(value)) return;
+
+    const newCode = [...code];
+    newCode[index] = value;
+    setCode(newCode);
+
+    // Auto advance to next input
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+
+    // If all digits are filled, try to verify
+    if (index === 5 && value && !newCode.includes("")) {
+      verifyCode(newCode.join(""));
+    }
+  };
+
+  const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
+    // Handle backspace
+    if (e.key === "Backspace" && !code[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").trim();
+    
+    // Only proceed if pasted content is 6 digits
+    if (!/^\d{6}$/.test(pastedData)) return;
+
+    const digits = pastedData.split("");
+    setCode(digits);
+    
+    // Focus last input
+    inputRefs.current[5]?.focus();
+    
+    // Verify the code
+    verifyCode(pastedData);
+  };
+
+  const verifyCode = async (verificationCode: string) => {
     try {
       setStatus("loading");
-      const token = searchParams.get("token");
-      const type = searchParams.get("type");
       const email = searchParams.get("email");
 
-      if (!token) {
-        setError("No confirmation token found");
-        setStatus("error");
-        return;
+      if (!email) {
+        throw new Error("Email address not found");
       }
 
-      if (type !== "signup" && type !== "invite") {
-        setError("Invalid confirmation type");
-        setStatus("error");
-        return;
-      }
-
-      // Verify the user's email with the token
+      // Verify the user's email with the code
       const { error: verifyError } = await supabase.auth.verifyOtp({
-        token: token,
-        type: type,
-        email: email,
+        token: verificationCode,
+        type: "signup",
+        email: email
       });
 
       if (verifyError) {
@@ -45,27 +124,69 @@ export default function ConfirmPage() {
       console.error("Verification error:", err);
       setError(err.message || "Failed to verify email");
       setStatus("error");
+      // Clear the code on error
+      setCode(Array(6).fill(""));
+      // Focus first input
+      inputRefs.current[0]?.focus();
     }
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-70px)] p-4 bg-gradient-to-br from-[#fbed96] via-[#E5DEFF] to-[#abecd6] animate-fade-in">
       <div className="max-w-md w-full bg-white/90 backdrop-blur-sm rounded-2xl shadow-sm border-2 border-white p-8 flex flex-col items-center gap-6">
-        {status === "pending" && (
+        {status === "input" && (
           <>
             <div className="w-16 h-16 bg-usfgreen/10 rounded-full flex items-center justify-center">
               <Mail className="w-8 h-8 text-usfgreen" />
             </div>
             <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold text-usfgreen">Verify Your Email</h1>
-              <p className="text-gray-600">Click the button below to verify your email address.</p>
+              <h1 className="text-2xl font-bold text-usfgreen">Enter Verification Code</h1>
+              <p className="text-gray-600">Please enter the 6-digit code sent to your email.</p>
+              <p className="text-sm text-gray-500">{searchParams.get("email")}</p>
             </div>
-            <Button 
-              onClick={confirmEmail}
-              className="bg-usfgreen hover:bg-usfgreen-light text-white shadow-sm transition-all active:bg-usfgreen/90"
-            >
-              Verify Email
-            </Button>
+            <div className="flex gap-2 justify-center my-4">
+              {[0, 1, 2, 3, 4, 5].map((index) => (
+                <input
+                  key={index}
+                  ref={(el) => (inputRefs.current[index] = el)}
+                  type="text"
+                  maxLength={1}
+                  value={code[index]}
+                  onChange={(e) => handleInputChange(index, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(index, e)}
+                  onPaste={handlePaste}
+                  className="w-12 h-14 text-center text-xl font-semibold border-2 rounded-lg focus:border-usfgreen focus:outline-none transition-colors bg-white/50"
+                  autoFocus={index === 0}
+                />
+              ))}
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <button
+                onClick={handleResendCode}
+                disabled={resendCooldown > 0}
+                className={`text-sm ${
+                  resendCooldown > 0
+                    ? "text-gray-400 cursor-not-allowed"
+                    : "text-usfgreen hover:underline"
+                }`}
+              >
+                {resendCooldown > 0
+                  ? `Resend code in ${resendCooldown}s`
+                  : "Didn't receive the code? Resend"}
+              </button>
+              {resendStatus === "success" && (
+                <p className="text-sm text-usfgreen flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  New code sent to your email
+                </p>
+              )}
+              {resendStatus === "error" && (
+                <p className="text-sm text-red-500 flex items-center gap-1">
+                  <XCircle className="w-4 h-4" />
+                  {resendError}
+                </p>
+              )}
+            </div>
           </>
         )}
 
@@ -75,8 +196,8 @@ export default function ConfirmPage() {
               <Loader2 className="w-8 h-8 text-usfgreen animate-spin" />
             </div>
             <div className="text-center space-y-2">
-              <h1 className="text-2xl font-bold text-usfgreen">Verifying Email</h1>
-              <p className="text-gray-600">Please wait while we verify your email address...</p>
+              <h1 className="text-2xl font-bold text-usfgreen">Verifying Code</h1>
+              <p className="text-gray-600">Please wait while we verify your code...</p>
             </div>
           </>
         )}
@@ -108,23 +229,23 @@ export default function ConfirmPage() {
             </div>
             <div className="text-center space-y-2">
               <h1 className="text-2xl font-bold text-red-600">Verification Failed</h1>
-              <p className="text-gray-600">{error || "Something went wrong during verification."}</p>
-              <p className="text-sm text-gray-500">Please try again or contact support if the problem persists.</p>
+              <p className="text-gray-600">{error || "Invalid verification code. Please try again."}</p>
             </div>
-            <div className="flex flex-col sm:flex-row gap-2 w-full">
-              <Button 
-                onClick={confirmEmail}
-                variant="outline"
-                className="w-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
-              >
-                Try Again
-              </Button>
-              <Button 
-                onClick={() => navigate("/")}
-                className="w-full bg-usfgreen hover:bg-usfgreen-light text-white shadow-sm transition-all active:bg-usfgreen/90"
-              >
-                Back to Home
-              </Button>
+            <div className="flex gap-2 justify-center my-4">
+              {[0, 1, 2, 3, 4, 5].map((index) => (
+                <input
+                  key={index}
+                  ref={(el) => (inputRefs.current[index] = el)}
+                  type="text"
+                  maxLength={1}
+                  value={code[index]}
+                  onChange={(e) => handleInputChange(index, e.target.value)}
+                  onKeyDown={(e) => handleKeyDown(index, e)}
+                  onPaste={handlePaste}
+                  className="w-12 h-14 text-center text-xl font-semibold border-2 rounded-lg focus:border-usfgreen focus:outline-none transition-colors bg-white/50 border-red-200"
+                  autoFocus={index === 0}
+                />
+              ))}
             </div>
           </>
         )}

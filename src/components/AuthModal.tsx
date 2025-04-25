@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/hooks/use-toast";
-import { AlertCircle, Mail, ArrowLeft } from "lucide-react";
+import { AlertCircle, Mail, ArrowLeft, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 interface AuthModalProps {
@@ -22,8 +22,22 @@ export default function AuthModal({ open, mode, onClose }: AuthModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [redirectCountdown, setRedirectCountdown] = useState(2);
   const navigate = useNavigate();
   const { signUp, signIn } = useAuth();
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (signupSuccess && redirectCountdown > 0) {
+      timer = setTimeout(() => {
+        setRedirectCountdown(prev => prev - 1);
+      }, 1000);
+    } else if (signupSuccess && redirectCountdown === 0) {
+      handleClose();
+      navigate(`/confirm?email=${encodeURIComponent(email)}`);
+    }
+    return () => clearTimeout(timer);
+  }, [signupSuccess, redirectCountdown, email, navigate]);
 
   const resetForm = () => {
     setName("");
@@ -88,7 +102,7 @@ export default function AuthModal({ open, mode, onClose }: AuthModalProps) {
             <DialogHeader>
               <DialogTitle>Check Your Email</DialogTitle>
               <DialogDescription>
-                We've sent you a verification link
+                We've sent you a verification code
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col items-center py-6 space-y-4">
@@ -97,30 +111,18 @@ export default function AuthModal({ open, mode, onClose }: AuthModalProps) {
               </div>
               <div className="text-center space-y-3">
                 <p className="text-gray-600">
-                  We've sent a verification email to:
+                  We've sent a verification code to:
                 </p>
                 <p className="font-medium text-gray-900">{email}</p>
                 <p className="text-sm text-gray-500">
-                  Click the link in the email to verify your account. After verification, you can log in to access all features.
+                  Enter the 6-digit code to verify your account.
                 </p>
+                <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mt-4">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Redirecting in {redirectCountdown}s...
+                </div>
               </div>
             </div>
-            <DialogFooter className="flex flex-col sm:flex-row gap-2">
-              <Button
-                variant="outline"
-                className="w-full hover:bg-gray-100 active:bg-gray-200 transition-colors"
-                onClick={() => setSignupSuccess(false)}
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Sign Up
-              </Button>
-              <Button
-                className="w-full bg-usfgreen hover:bg-usfgreen-light active:bg-usfgreen/90 text-white transition-colors"
-                onClick={handleClose}
-              >
-                Got It
-              </Button>
-            </DialogFooter>
           </>
         ) : (
           <>
