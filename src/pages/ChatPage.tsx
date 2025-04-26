@@ -1,20 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { MessageCircle, Image as ImageIcon, Send, Loader2 } from "lucide-react";
 import { useChat, Message } from "@/hooks/useChat";
-import { useAuth } from "@/hooks/useAuth";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-
-// Temporary mock data for testing
-const MOCK_CONVERSATIONS = Array.from({ length: 20 }, (_, i) => ({
-  id: `mock-${i}`,
-  profile: {
-    full_name: `Test User ${i + 1}`,
-    avatar_url: null
-  },
-  last_message: `This is test message ${i + 1} to check scrolling behavior`,
-  created_at: new Date().toISOString()
-}));
 
 const formatMessageTime = (dateString: string) => {
   const date = new Date(dateString);
@@ -49,14 +37,15 @@ const formatLastMessageTime = (dateString: string | null) => {
 export default function ChatPage() {
   const { conversationId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { 
     conversations, 
     messages,
     setMessages,
     loading,
     loadMessages,
-    sendMessage 
+    sendMessage,
+    currentUserHashedId,
+    setConversations
   } = useChat();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -71,13 +60,14 @@ export default function ChatPage() {
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const lastScrollPosition = useRef(0);
+  const [isSending, setIsSending] = useState(false);
 
   // Scroll to top when component mounts or conversationId changes
   useEffect(() => {
-    window.scrollTo(0, 0);
+    scrollToBottom();
   }, [conversationId]);
 
-  // Initial load of messages when accessing URL directly
+  // Remove initial load effect since we'll handle scrolling in polling
   useEffect(() => {
     if (conversationId && isInitialLoad) {
       loadMessages(conversationId);
@@ -112,55 +102,69 @@ export default function ChatPage() {
     }
   }, [loading]);
 
-  // Scroll to bottom when messages change or when loading completes
+  // Load messages and setup polling
   useEffect(() => {
-    if (!loading) {
-      scrollToBottom();
-    }
-  }, [messages, loading]);
+    let pollInterval: NodeJS.Timeout;
 
-  // Load messages and setup subscription
-  useEffect(() => {
-    if (!conversationId) {
-      if (subscriptionRef.current) {
-        supabase.removeChannel(subscriptionRef.current);
-        subscriptionRef.current = null;
-      }
-      return;
-    }
-    
-    // Prevent duplicate subscriptions
-    if (subscriptionRef.current) {
-      supabase.removeChannel(subscriptionRef.current);
-    }
-   
-    const messageSubscription = supabase
-      .channel(`messages:${conversationId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload: any) => {
-          const isNewMessage = !messages.some(msg => msg.id === payload.new.id);
-          if (isNewMessage) {
-            setMessages(prev => [...prev, payload.new as Message]);
+    async function pollMessages() {
+      if (!conversationId) return;
+
+      try {
+        const { data: messages, error } = await supabase.functions.invoke('get-messages', {
+          body: { conversation_id: conversationId }
+        });
+
+        if (!error && messages?.data) {
+          setMessages(messages.data);
+
+          // Update last message in conversations list
+          const lastMessage = messages.data[messages.data.length - 1];
+          if (lastMessage) {
+            setConversations(prevConversations => 
+              prevConversations.map(conv => 
+                conv.id === conversationId
+                  ? {
+                      ...conv,
+                      last_message: lastMessage.content,
+                      last_message_at: lastMessage.created_at
+                    }
+                  : conv
+              )
+            );
+          }
+          console.log("isInitialLoad", isInitialLoad);
+          // Scroll to bottom on first load only
+          if (isInitialLoad) {
+            setTimeout(() => {
+              scrollToBottom();
+              setIsInitialLoad(false);
+            }, 500);
           }
         }
-      )
-      .subscribe();
+      } catch (err) {
+        console.error('Error polling messages:', err);
+      }
+    }
 
-    subscriptionRef.current = messageSubscription;
+    if (conversationId) {
+      // Initial load
+      pollMessages();
+
+      // Setup polling every 1.5 seconds
+      pollInterval = setInterval(pollMessages, 1500);
+    }
 
     return () => {
-      if (subscriptionRef.current) {
-        supabase.removeChannel(subscriptionRef.current);
+      if (pollInterval) {
+        clearInterval(pollInterval);
       }
     };
-  }, [conversationId, messages, setMessages]);
+  }, [conversationId, setConversations, isInitialLoad]);
+
+  // Reset isInitialLoad when conversation changes
+  useEffect(() => {
+    setIsInitialLoad(true);
+  }, [conversationId]);
 
   // Save scroll position when keyboard appears
   useEffect(() => {
@@ -195,7 +199,10 @@ export default function ChatPage() {
     if (messagesEndRef.current) {
       const messagesContainer = messagesEndRef.current.parentElement;
       if (messagesContainer) {
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        messagesContainer.scrollTo({
+          top: messagesContainer.scrollHeight,
+          behavior: 'smooth'
+        });
       }
     }
   };
@@ -211,14 +218,18 @@ export default function ChatPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageInput.trim() && !selectedFile || !conversationId) return;
+    if (!messageInput.trim() && !selectedFile || !conversationId || isSending) return;
 
-    await sendMessage(conversationId, messageInput, selectedFile || undefined);
-    setMessageInput("");
-    setSelectedFile(null);
-    setPreviewUrl(null);
+    setIsSending(true);
+    try {
+      await sendMessage(conversationId, messageInput, selectedFile || undefined);
+      setMessageInput("");
+      setSelectedFile(null);
+      setPreviewUrl(null);
+    } finally {
+      setIsSending(false);
+    }
   };
-
   return (
     <div className="w-full flex flex-col md:flex-row max-w-4xl mx-auto bg-white/50 backdrop-blur-sm rounded-t-2xl md:rounded-xl shadow-sm hover:shadow-md transition-all border border-white mt-0 md:mt-4 animate-fade-in h-[calc(90dvh)] md:h-[550px] overflow-hidden">
       {/* Chat list - Hide on mobile when conversation is selected */}
@@ -328,7 +339,7 @@ export default function ChatPage() {
                 <div className="flex justify-center items-center h-32">
                   <Loader2 className="h-8 w-8 text-usfgreen animate-spin" />
                 </div>
-              ) : messages.length === 0 ? (
+              ) : !messages || messages.length === 0 ? (
                 <div className="text-center text-gray-400 py-6 text-sm rounded-xl mt-4 bg-white/90 border border-white shadow-sm">
                   <MessageCircle className="h-8 w-8 mx-auto mb-2 text-usfgold opacity-80" />
                   No messages yet. Start the conversation!
@@ -336,13 +347,13 @@ export default function ChatPage() {
               ) : (
                 <>
                   <div className="flex-1" /> {/* Spacer to push messages down */}
-                  {messages.map((msg) => (
+                  {Array.isArray(messages) && messages.map((msg) => (
                     <div
                       key={msg.id}
                       className={`
                         max-w-[86%] md:max-w-[80%]
                         break-words animate-fade-in
-                        ${msg.sender_id === user?.id
+                        ${msg.hashed_sender_id === currentUserHashedId
                           ? "self-end bg-usfgreen/90 text-white ml-10 md:ml-32 hover:bg-usfgreen transition-colors shadow-md"
                           : "self-start bg-white text-usfgreen border border-white mr-10 md:mr-32 hover:border-white transition-all shadow-sm"
                         }
@@ -362,11 +373,11 @@ export default function ChatPage() {
                         />
                       )}
                       <span className={`text-[10px] mt-1 opacity-70 ${
-                        msg.sender_id === user?.id
+                        msg.hashed_sender_id === currentUserHashedId
                           ? "text-white/80"
                           : "text-gray-500"
                       }`}>
-                        {formatMessageTime(msg.created_at)}
+                        {formatLastMessageTime(msg.created_at)}
                       </span>
                     </div>
                   ))}
@@ -376,38 +387,48 @@ export default function ChatPage() {
             </div>
 
             {/* Send bar */}
-            <form onSubmit={handleSendMessage} className="flex-shrink-0 px-2 md:px-6 pt-3 md:pt-4 pb-4 bg-white backdrop-blur-sm border-t border-white/20 shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)]">
+            <form onSubmit={handleSendMessage} className="flex-shrink-0 px-2 md:px-6 pt-3 md:pt-4 pb-4 bg-white backdrop-blur-sm border-t border-white/20 shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.05)] relative">
+              {isSending && (
+                <div className="absolute inset-x-0 -top-1">
+                  <div className="h-1 bg-usfgold/30 overflow-hidden rounded-full mx-4">
+                    <div className="h-full bg-usfgold animate-progress-infinite rounded-full w-1/3"></div>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2.5">
                 <input
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
+                  disabled={isSending}
                   onFocus={() => {
-                    // Save current scroll position when keyboard appears
-                    if (window.innerWidth < 1024) { // Only on mobile/tablet
+                    if (window.innerWidth < 1024) {
                       lastScrollPosition.current = window.scrollY;
                     }
                   }}
                   onBlur={() => {
-                    // Scroll to top when keyboard is dismissed on mobile
-                    if (window.innerWidth < 1024) { // Only on mobile/tablet
+                    if (window.innerWidth < 1024) {
                       setTimeout(() => {
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }, 100);
                     }
                   }}
-                  placeholder="Type a message…"
-                  className="flex-1 px-4 py-2 rounded-xl border border-white/50 bg-white/95 text-sm focus:outline-none focus:ring-2 focus:ring-usfgold transition-all hover:border-white shadow-sm"
+                  placeholder={isSending ? "Sending..." : "Type a message…"}
+                  className="flex-1 px-4 py-2 rounded-xl border border-white/50 bg-white/95 text-sm focus:outline-none focus:ring-2 focus:ring-usfgold transition-all hover:border-white shadow-sm disabled:opacity-50"
                   maxLength={200}
                   style={{ fontSize: '16px' }}
                   enterKeyHint="send"
                 />
                 <button
                   type="submit"
-                  disabled={!messageInput.trim() && !selectedFile}
+                  disabled={(!messageInput.trim() && !selectedFile) || isSending}
                   className="p-2 text-usfgreen disabled:text-gray-300 hover:bg-white/90 rounded-lg transition flex-shrink-0 disabled:hover:bg-transparent border border-white/50 hover:border-white disabled:border-transparent shadow-sm"
                   aria-label="Send message"
                 >
-                  <Send size={20} />
+                  {isSending ? (
+                    <Loader2 size={20} className="animate-spin" />
+                  ) : (
+                    <Send size={20} />
+                  )}
                 </button>
               </div>
               <div className="mt-1 text-xs text-gray-500">

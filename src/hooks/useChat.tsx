@@ -5,10 +5,11 @@ import { useAuth } from './useAuth';
 export type Message = {
   id: string;
   conversation_id: string;
-  sender_id: string;
+  hashed_sender_id: string;
   content: string;
   image_url: string | null;
   created_at: string;
+  isOptimistic?: boolean;
 };
 
 export type Conversation = {
@@ -27,48 +28,53 @@ export type Conversation = {
 };
 
 export function useChat() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUserHashedId, setCurrentUserHashedId] = useState<string | null>(null);
+
+  // Get current user's hashed ID
+  useEffect(() => {
+    async function getHashedId() {
+      if (!profile?.id) return;
+
+      try {
+        const { data: hashedId, error } = await supabase.functions.invoke('get-hashed-id');
+
+        if (!error && hashedId?.data) {
+          setCurrentUserHashedId(hashedId.data);
+          console.log("our hashed id", hashedId.data);
+        }
+      } catch (err) {
+        console.error('Error getting hashed ID:', err);
+      }
+    }
+
+    getHashedId();
+  }, [profile?.id]);
 
   // Fetch conversations
   useEffect(() => {
     let conversationSubscription: any = null;
 
     async function getConversations() {
-      if (!user?.id) return;
+      if (!profile?.id) return;
 
-      const { data: conversations, error } = await supabase
-        .from('conversations')
-        .select('*')
-        .or(`participant1_id.eq.${user.id},participant2_id.eq.${user.id}`)
-        .order('last_message_at', { ascending: false });
+      try {
+        // Call edge function to get conversations with hashed IDs
+        const { data: hashedConversations, error } = await supabase.functions.invoke('get-hashed-conversations');
 
-      if (!error && conversations) {
-        // Get profiles for all participants
-        const otherUserIds = conversations.map(conv => 
-          conv.participant1_id === user.id ? conv.participant2_id : conv.participant1_id
-        );
-
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, avatar_url, hashed_id')
-          .in('id', otherUserIds);
-
-        // Transform data to show the other participant's profile
-        const transformedData = conversations.map(conv => ({
-          ...conv,
-          profile: profiles?.find(p => 
-            p.id === (conv.participant1_id === user.id ? conv.participant2_id : conv.participant1_id)
-          ) || null
-        }));
-        
-        setConversations(transformedData);
+        if (!error && hashedConversations?.data) {
+          console.log("hashedConversations", hashedConversations.data);
+          setConversations(hashedConversations.data);
+        }
+      } catch (err) {
+        console.error('Error fetching conversations:', err);
       }
     }
 
-    if (user?.id) {
+    if (profile?.id) {
       getConversations();
 
       // Subscribe to conversation changes
@@ -80,7 +86,6 @@ export function useChat() {
             event: '*',
             schema: 'public',
             table: 'conversations',
-            filter: `participant1_id=eq.${user.id},participant2_id=eq.${user.id}`,
           },
           () => {
             getConversations();
@@ -94,28 +99,33 @@ export function useChat() {
         supabase.removeChannel(conversationSubscription);
       }
     };
-  }, [user?.id]);
+  }, [profile?.id]);
 
   // Fetch and subscribe to messages for current conversation
   const loadMessages = useCallback(async (conversationId: string) => {
     setLoading(true);
   
-    const { data, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
+    try {
+      // Call edge function to get messages with hashed sender IDs
+      const { data: hashedMessages, error } = await supabase.functions.invoke('get-hashed-messages', {
+        body: { conversation_id: conversationId }
+      });
   
-    if (!error && data) {
-      setMessages(data);
+      if (!error && hashedMessages?.data) {
+        setMessages(hashedMessages.data);
+      } else {
+        setMessages([]); // Ensure messages is always an array
+      }
+    } catch (err) {
+      console.error('Error loading messages:', err);
+      setMessages([]); // Reset to empty array on error
+    } finally {
+      setLoading(false);
     }
-  
-    setLoading(false);
   }, []);
-  
 
   const sendMessage = async (conversationId: string, content: string, imageFile?: File) => {
-    if (!user?.id) return;
+    if (!profile?.id) return;
 
     let image_url = null;
 
@@ -123,7 +133,7 @@ export function useChat() {
     if (imageFile) {
       const fileExt = imageFile.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
+      const filePath = `${profile.id}/${fileName}`;
 
       const { error: uploadError, data } = await supabase.storage
         .from('chat_images')
@@ -134,7 +144,6 @@ export function useChat() {
         return;
       }
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('chat_images')
         .getPublicUrl(filePath);
@@ -142,72 +151,40 @@ export function useChat() {
       image_url = publicUrl;
     }
 
-    // Send message
-    const { error } = await supabase.from('messages').insert([
-      {
+    // Send message through edge function to handle hashed IDs
+    const { error } = await supabase.functions.invoke('send-message', {
+      body: {
         conversation_id: conversationId,
-        sender_id: user.id,
         content,
         image_url
       }
-    ]);
+    });
 
     if (!error) {
-      // Update conversation's last message
-      await supabase
-        .from('conversations')
-        .update({
-          last_message: content,
-          last_message_at: new Date().toISOString()
-        })
-        .eq('id', conversationId);
+      // Update conversation's last message through edge function
+      await supabase.functions.invoke('update-conversation-last-message', {
+        body: {
+          conversation_id: conversationId,
+          last_message: content
+        }
+      });
     }
   };
 
-  const startConversation = async (hashedVendorId: string) => {
-    if (!user?.id) return;
+  const startConversation = async (hashedUserId: string) => {
+    if (!user?.email) return;
 
     try {
-      // Call edge function to get real vendor ID from hashed ID
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-vendor-id`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ hashed_id: hashedVendorId })
+      // Call edge function to start conversation with hashed IDs
+      const { data: conversation, error } = await supabase.functions.invoke('start-conversation', {
+        body: { hashed_user_id: hashedUserId }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to get vendor ID');
+      if (error) {
+        throw error;
       }
 
-      const { vendor_id } = await response.json();
-
-      // Check if conversation already exists
-      const { data: existing } = await supabase
-        .from('conversations')
-        .select('id')
-        .or(`and(participant1_id.eq.${user.id},participant2_id.eq.${vendor_id}),and(participant1_id.eq.${vendor_id},participant2_id.eq.${user.id})`)
-        .single();
-
-      if (existing) {
-        return existing.id;
-      }
-
-      // Create new conversation
-      const { data, error } = await supabase
-        .from('conversations')
-        .insert({
-          participant1_id: user.id,
-          participant2_id: vendor_id
-        })
-        .select()
-        .single();
-
-      if (!error && data) {
-        return data.id;
-      }
+      return conversation?.data?.id;
     } catch (error) {
       console.error('Error starting conversation:', error);
       return null;
@@ -221,6 +198,8 @@ export function useChat() {
     loading,
     loadMessages,
     sendMessage,
-    startConversation
+    startConversation,
+    currentUserHashedId,
+    setConversations
   };
 } 
