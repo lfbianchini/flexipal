@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useVendorStatus } from "@/hooks/useVendorStatus";
 import AuthModal from "./AuthModal";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
 /**
@@ -104,7 +104,12 @@ const Navbar = () => {
         ))}
       </div>
       <div className="hidden lg:flex items-center gap-2 ml-4 flex-shrink-0">
-        {!user ? (
+        {user === undefined ? (
+          // Loading state
+          <div className="flex items-center gap-2">
+            <div className="w-[160px] h-9 bg-gray-200 rounded animate-pulse" />
+          </div>
+        ) : !user ? (
           <div className="flex gap-2">
             <Button 
               variant="outline" 
@@ -123,20 +128,26 @@ const Navbar = () => {
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Avatar className="flex-shrink-0">
-              <AvatarImage src={profile?.avatar_url || ""} alt={profile?.full_name || ""} />
-              <AvatarFallback>
-                {profile?.full_name?.split(" ").map(w => w[0]).join("").toUpperCase() || "U"}
-              </AvatarFallback>
-            </Avatar>
-            <Link
-              to="/profile"
-              className="max-w-[100px] truncate block text-usfgreen font-semibold hover:text-usfgreen-light transition"
-              title={profile?.full_name || user.email}
-              onClick={() => setMobileOpen(false)}
-            >
-              {truncateName(profile?.full_name || user.email, 12)}
-            </Link>
+            <div className="relative flex-shrink-0">
+              <Avatar className="flex-shrink-0">
+                <AvatarImage src={profile?.avatar_url || ""} alt={profile?.full_name || ""} />
+                {!profile?.avatar_url && (
+                  <div className="absolute inset-0 bg-gray-200 rounded-full animate-pulse" />
+                )}
+              </Avatar>
+            </div>
+            {profile?.full_name ? (
+              <Link
+                to="/profile"
+                className="max-w-[100px] truncate block text-usfgreen font-semibold hover:text-usfgreen-light transition"
+                title={profile?.full_name}
+                onClick={() => setMobileOpen(false)}
+              >
+                {truncateName(profile?.full_name, 12)}
+              </Link>
+            ) : (
+              <div className="w-[80px] h-5 bg-gray-200 rounded animate-pulse" />
+            )}
             <Button 
               variant="outline" 
               onClick={handleSignOut}
@@ -165,7 +176,12 @@ const Navbar = () => {
               {name === "Vendor Dashboard" && status?.is_live && <LiveIndicator />}
             </Link>
           ))}
-          {!user ? (
+          {user === undefined ? (
+            // Loading state for mobile
+            <div className="flex items-center gap-2 p-4">
+              <div className="w-full h-9 bg-gray-200 rounded animate-pulse" />
+            </div>
+          ) : !user ? (
             <div className="flex gap-2 p-4">
               <Button 
                 variant="outline" 
@@ -184,20 +200,26 @@ const Navbar = () => {
             </div>
           ) : (
             <div className="flex items-center gap-3 p-4">
-              <Avatar>
-                <AvatarImage src={profile?.avatar_url || ""} alt={profile?.full_name || ""} />
-                <AvatarFallback>
-                  {profile?.full_name?.split(" ").map(w => w[0]).join("").toUpperCase() || "U"}
-                </AvatarFallback>
-              </Avatar>
-              <Link
-                to="/profile"
-                className="max-w-[130px] truncate block text-usfgreen font-semibold hover:text-usfgreen-light transition"
-                title={profile?.full_name || user.email}
-                onClick={() => setMobileOpen(false)}
-              >
-                {truncateName(profile?.full_name || user.email)}
-              </Link>
+              <div className="relative flex-shrink-0">
+                <Avatar>
+                  <AvatarImage src={profile?.avatar_url || ""} alt={profile?.full_name || ""} />
+                  {!profile?.avatar_url && (
+                    <div className="absolute inset-0 bg-gray-200 rounded-full animate-pulse" />
+                  )}
+                </Avatar>
+              </div>
+              {profile?.full_name ? (
+                <Link
+                  to="/profile"
+                  className="max-w-[130px] truncate block text-usfgreen font-semibold hover:text-usfgreen-light transition"
+                  title={profile?.full_name}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {truncateName(profile?.full_name)}
+                </Link>
+              ) : (
+                <div className="w-[100px] h-5 bg-gray-200 rounded animate-pulse" />
+              )}
               <Button 
                 variant="outline" 
                 onClick={() => { handleSignOut(); setMobileOpen(false); }}

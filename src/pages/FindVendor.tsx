@@ -39,8 +39,6 @@ const FindVendor = () => {
     if (e) e.preventDefault();
     const searchLocation = location;
     await getVendorsByLocation(searchLocation);
-    console.log("filteredVendors", filteredVendors);
-    console.log("loading", loading);
     setLastSearchedLocation(searchLocation);
     setIsInitialLoad(false);
   };
@@ -77,8 +75,6 @@ const FindVendor = () => {
         </div>
       );
     }
-    console.log("filteredVendors", filteredVendors);
-    console.log("loading", loading);
     if (filteredVendors.length === 0 && !loading && lastSearchedLocation) {
       return (
         <div className="animate-fade-in">

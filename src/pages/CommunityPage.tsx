@@ -77,7 +77,6 @@ export default function CommunityPage() {
 
   const handleChatClick = async (hashedUserId: string) => {
     const conversationId = await startConversation(hashedUserId);
-    console.log("conversationId", conversationId);
     if (conversationId) {
       navigate(`/chat/${conversationId}`);
     }

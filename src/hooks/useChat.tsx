@@ -47,7 +47,6 @@ export function useChat() {
 
         if (!error && hashedId?.data) {
           setCurrentUserHashedId(hashedId.data);
-          console.log("our hashed id", hashedId.data);
         }
       } catch (err) {
         console.error('Error getting hashed ID:', err);
@@ -69,7 +68,6 @@ export function useChat() {
         const { data: hashedConversations, error } = await supabase.functions.invoke('get-hashed-conversations');
 
         if (!error && hashedConversations?.data) {
-          console.log("hashedConversations", hashedConversations.data);
           setConversations(hashedConversations.data);
         }
       } catch (err) {

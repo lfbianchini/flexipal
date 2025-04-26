@@ -35,56 +35,30 @@ export function useVendorStatus() {
 
       if (error) throw error;
       if (response?.data) {
-        console.log('Setting new status:', response.data);
         setStatus(response.data);
-        console.log('Status set to:', response.data);
       }
     } catch (error) {
       console.error('Error fetching vendor status:', error);
     }
   }, [user?.email]);
 
-  // Set up subscription
+  // Set up polling
   useEffect(() => {
-    let statusSubscription: any = null;
+    let pollingInterval: NodeJS.Timeout | null = null;
 
     if (user?.email) {
       // Get initial status
       fetchStatus();
 
-      // Subscribe to changes
-      statusSubscription = supabase
-        .channel('vendor_status_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'vendor_status'
-          },
-          (payload) => {
-            console.log('Received status change:', payload);
-          
-            if (payload.eventType === 'DELETE') {
-              setStatus(null);
-            } else if (payload.new) {
-              setStatus(payload.new as VendorStatus);
-            } else {
-              fetchStatus(); // fallback, but almost never needed
-            }
-          }
-        )
-        .subscribe((status) => {
-          console.log('Subscription status:', status);
-        });
-
-      console.log('Subscription set up');
+      // Set up polling every 5 minutes
+      pollingInterval = setInterval(() => {
+        fetchStatus();
+      }, 5 * 60 * 1000); // 5 minutes in milliseconds
     }
 
     return () => {
-      if (statusSubscription) {
-        console.log('Cleaning up subscription');
-        supabase.removeChannel(statusSubscription);
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
       }
     };
   }, [user?.email, fetchStatus]);
@@ -124,7 +98,6 @@ export function useVendorStatus() {
       
       // Immediately update local state
       if (response?.data) {
-        console.log('Setting status after update:', response.data);
         setStatus(response.data);
       }
       
