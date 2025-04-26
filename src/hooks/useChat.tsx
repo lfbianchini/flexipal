@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
 export type Message = {
   id: string;
@@ -29,6 +31,7 @@ export type Conversation = {
 
 export function useChat() {
   const { user, profile } = useAuth();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,11 +110,15 @@ export function useChat() {
   
     try {
       // Call edge function to get messages with hashed sender IDs
-      const { data: hashedMessages, error } = await supabase.functions.invoke('get-hashed-messages', {
+      const { data: hashedMessages, error } = await supabase.functions.invoke('get-messages', {
         body: { conversation_id: conversationId }
       });
   
-      if (!error && hashedMessages?.data) {
+      if (error) {
+        navigate('/chat');
+      }
+  
+      if (hashedMessages?.data) {
         setMessages(hashedMessages.data);
       } else {
         setMessages([]); // Ensure messages is always an array
@@ -119,10 +126,11 @@ export function useChat() {
     } catch (err) {
       console.error('Error loading messages:', err);
       setMessages([]); // Reset to empty array on error
+      toast.error('Failed to load messages');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [navigate]);
 
   const sendMessage = async (conversationId: string, content: string, imageFile?: File) => {
     if (!profile?.id) return;

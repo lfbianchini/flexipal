@@ -3,6 +3,7 @@ import { MessageCircle, Image as ImageIcon, Send, Loader2 } from "lucide-react";
 import { useChat, Message } from "@/hooks/useChat";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from 'sonner';
 
 const formatMessageTime = (dateString: string) => {
   const date = new Date(dateString);
@@ -114,7 +115,11 @@ export default function ChatPage() {
           body: { conversation_id: conversationId }
         });
 
-        if (!error && messages?.data) {
+        if (error) {
+          navigate('/chat');
+        }
+
+        if (messages?.data) {
           setMessages(messages.data);
 
           // Update last message in conversations list
@@ -132,7 +137,7 @@ export default function ChatPage() {
               )
             );
           }
-          console.log("isInitialLoad", isInitialLoad);
+          
           // Scroll to bottom on first load only
           if (isInitialLoad) {
             setTimeout(() => {
@@ -143,6 +148,9 @@ export default function ChatPage() {
         }
       } catch (err) {
         console.error('Error polling messages:', err);
+        if (err.message !== 'Unauthorized access to conversation') {
+          toast.error('Failed to load messages');
+        }
       }
     }
 
@@ -159,7 +167,7 @@ export default function ChatPage() {
         clearInterval(pollInterval);
       }
     };
-  }, [conversationId, setConversations, isInitialLoad]);
+  }, [conversationId, setConversations, isInitialLoad, navigate]);
 
   // Reset isInitialLoad when conversation changes
   useEffect(() => {
