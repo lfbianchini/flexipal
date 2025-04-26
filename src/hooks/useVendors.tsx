@@ -2,21 +2,32 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export type Vendor = {
-  id: string;
-  user_id: string;
+  hashed_id: string;
   location: string;
   is_live: boolean;
   note: string | null;
   end_time: string | null;
-  profiles: {
+  profile: {
     full_name: string;
     avatar_url: string;
   } | null;
 };
 
+const DEFAULT_LOCATION = "undercafé";
+
 export function useVendors() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [filteredVendors, setFilteredVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentLocation, setCurrentLocation] = useState(DEFAULT_LOCATION);
+
+  const filterVendors = (vendorList: Vendor[], location: string) => {
+    return vendorList.filter(vendor => 
+      vendor.is_live && 
+      vendor.location === location &&
+      (!vendor.end_time || new Date(vendor.end_time) > new Date())
+    );
+  };
 
   useEffect(() => {
     let subscription: any = null;
@@ -24,29 +35,22 @@ export function useVendors() {
     async function getVendors() {
       setLoading(true);
       
-      // Get all live vendors with their profiles
-      const { data, error } = await supabase
-        .from('vendor_status')
-        .select(`
-          *,
-          profiles (
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('is_live', true)
-        .order('last_active', { ascending: false });
+      try {
+        // Call the edge function to get hashed vendor data
+        const { data: hashedVendors, error } = await supabase.functions.invoke('get-vendors--hashed-');
 
-      console.log(data)
-      if (error) {
-        console.error('Error fetching vendors:', error);
+        if (error) {
+          console.error('Error fetching vendors:', error);
+          return;
+        }
+
+        setVendors(hashedVendors);
+        setFilteredVendors(filterVendors(hashedVendors, currentLocation));
+      } catch (err) {
+        console.error('Error invoking edge function:', err);
+      } finally {
+        setLoading(false);
       }
-
-      if (!error && data) {
-        setVendors(data as unknown as Vendor[]);
-      }
-
-      setLoading(false);
     }
 
     // Subscribe to changes
@@ -74,23 +78,39 @@ export function useVendors() {
         supabase.removeChannel(subscription);
       }
     };
-  }, []);
+  }, [currentLocation]);
 
   const getVendorsByLocation = async (location: string) => {
-    // simulate a loading delay
     setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 200));
-    setLoading(false);
-    return vendors.filter(vendor => 
-      vendor.is_live && 
-      vendor.location === location &&
-      // Only show vendors whose end_time hasn't passed
-      (!vendor.end_time || new Date(vendor.end_time) > new Date())
-    );
+    setCurrentLocation(location);
+    
+    // Filter current vendors immediately
+    const filtered = filterVendors(vendors, location);
+    setFilteredVendors(filtered);
+    
+    try {
+      // Then refresh from the server
+      const { data: hashedVendors, error } = await supabase.functions.invoke('get-vendors--hashed-');
+      
+      if (!error && hashedVendors) {
+        setVendors(hashedVendors);
+        const updatedFiltered = filterVendors(hashedVendors, location);
+        setFilteredVendors(updatedFiltered);
+        return updatedFiltered;
+      }
+      
+      return filtered;
+    } catch (err) {
+      console.error('Error fetching vendors:', err);
+      return filtered;
+    } finally {
+      setLoading(false);
+    }
   };
 
   return {
     vendors,
+    filteredVendors,
     loading,
     getVendorsByLocation,
   };

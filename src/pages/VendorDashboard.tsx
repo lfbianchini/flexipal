@@ -84,8 +84,8 @@ const VendorDashboard = () => {
       title: "You're now live!",
       description: `Vending at ${location} until ${endTimeDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
     });
-
     window.location.reload();
+
   };
 
   const handleStopVending = async () => {
@@ -105,7 +105,6 @@ const VendorDashboard = () => {
       title: "Stopped vending",
       description: "You are no longer visible to users",
     });
-
     window.location.reload();
   };
 

@@ -2,13 +2,12 @@ import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
 
 export type Profile = {
-  id: string;
+  id: string; // This will now be a hashed ID
   full_name: string;
   avatar_url: string;
 };
 
 export type AuthUser = {
-  id: string;
   email: string;
   email_confirmed_at: string;
 };
@@ -27,6 +26,9 @@ interface AuthState {
   refreshProfile: () => Promise<void>;
   initialize: () => Promise<void>;
 }
+
+// Global flag to track initialization
+let isInitializing = false;
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -53,61 +55,54 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   refreshProfile: async () => {
-    const { user, profile } = get();
-    if (!user?.id) return;
+    const { user } = get();
+    if (!user?.email) return;
 
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("id, full_name, avatar_url")
-      .eq("id", user.id)
-      .maybeSingle();
-    
-    // Only update if the profile data actually changed
-    if (JSON.stringify(profile) !== JSON.stringify(prof)) {
-      set({ profile: prof || null });
+    const session = await supabase.auth.getSession();
+    const userId = session.data.session?.user?.id;
+    if (!userId) return;
+
+    const { data: profile, error } = await supabase.functions.invoke('get-hashed-profile', {
+      body: { user_id: userId }
+    });
+
+    if (!error && profile) {
+      set({ profile });
     }
   },
 
   initialize: async () => {
-    const { initialized, setUser, setProfile, setIsAdmin, setLoading } = get();
-    if (initialized) return;
+    const { initialized } = get();
+    if (initialized || isInitializing) return;
 
+    isInitializing = true;
+    const { setUser, setProfile, setLoading } = get();
     setLoading(true);
-    const { data: { session } } = await supabase.auth.getSession();
 
-    if (session?.user) {
-      const { id, email, email_confirmed_at } = session.user;
-      setUser({ id, email, email_confirmed_at });
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
 
-      // Only fetch profile and roles if we don't have them yet
-      const { profile, isAdmin } = get();
-      if (!profile || !isAdmin) {
-        const [profileResult, rolesResult] = await Promise.all([
-          supabase
-            .from("profiles")
-            .select("id, full_name, avatar_url")
-            .eq("id", id)
-            .maybeSingle(),
-          supabase
-            .from("user_roles")
-            .select("*")
-            .eq("user_id", id)
+      if (session?.user) {
+        const { email, email_confirmed_at } = session.user;
+        setUser({ email, email_confirmed_at });
+
+        // Get hashed profile using edge functions
+        const [profileResult] = await Promise.all([
+          supabase.functions.invoke('get-hashed-profile', {
+            body: { user_id: session.user.id }
+          }),
         ]);
-        
 
-        if (profileResult.data && JSON.stringify(profile) !== JSON.stringify(profileResult.data)) {
+        if (!profileResult.error && profileResult.data) {
           setProfile(profileResult.data);
-          set({ profile: profileResult.data });
-        }
-        
-        const newIsAdmin = rolesResult.data?.some((r: any) => r.role === "admin") || false;
-        if (isAdmin !== newIsAdmin) {
-          setIsAdmin(newIsAdmin);
         }
       }
+    } catch (error) {
+      console.error('Error during initialization:', error);
+    } finally {
+      isInitializing = false;
+      setLoading(false);
+      set({ initialized: true });
     }
-
-    setLoading(false);
-    set({ initialized: true });
   }
 })); 

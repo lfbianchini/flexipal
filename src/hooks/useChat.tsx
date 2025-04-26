@@ -22,6 +22,7 @@ export type Conversation = {
     id: string;
     full_name: string;
     avatar_url: string;
+    hashed_id: string;
   } | null;
 };
 
@@ -52,7 +53,7 @@ export function useChat() {
 
         const { data: profiles } = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url')
+          .select('id, full_name, avatar_url, hashed_id')
           .in('id', otherUserIds);
 
         // Transform data to show the other participant's profile
@@ -163,32 +164,53 @@ export function useChat() {
     }
   };
 
-  const startConversation = async (otherUserId: string) => {
+  const startConversation = async (hashedVendorId: string) => {
     if (!user?.id) return;
 
-    // Check if conversation already exists
-    const { data: existing } = await supabase
-      .from('conversations')
-      .select('id')
-      .or(`and(participant1_id.eq.${user.id},participant2_id.eq.${otherUserId}),and(participant1_id.eq.${otherUserId},participant2_id.eq.${user.id})`)
-      .single();
+    try {
+      // Call edge function to get real vendor ID from hashed ID
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-vendor-id`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ hashed_id: hashedVendorId })
+      });
 
-    if (existing) {
-      return existing.id;
-    }
+      if (!response.ok) {
+        throw new Error('Failed to get vendor ID');
+      }
 
-    // Create new conversation
-    const { data, error } = await supabase
-      .from('conversations')
-      .insert({
-        participant1_id: user.id,
-        participant2_id: otherUserId
-      })
-      .select()
-      .single();
+      const { vendor_id } = await response.json();
 
-    if (!error && data) {
-      return data.id;
+      // Check if conversation already exists
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('id')
+        .or(`and(participant1_id.eq.${user.id},participant2_id.eq.${vendor_id}),and(participant1_id.eq.${vendor_id},participant2_id.eq.${user.id})`)
+        .single();
+
+      if (existing) {
+        return existing.id;
+      }
+
+      // Create new conversation
+      const { data, error } = await supabase
+        .from('conversations')
+        .insert({
+          participant1_id: user.id,
+          participant2_id: vendor_id
+        })
+        .select()
+        .single();
+
+      if (!error && data) {
+        return data.id;
+      }
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      return null;
     }
   };
 

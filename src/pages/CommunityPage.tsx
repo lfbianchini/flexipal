@@ -18,7 +18,7 @@ const ROLES = ["Buyer", "Vendor"] as const;
 export default function CommunityPage() {
   const navigate = useNavigate();
   const { posts, loading, createPost, deletePost } = useCommunityPosts();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { startConversation } = useChat();
   const [formData, setFormData] = useState({
     role: 'Buyer' as 'Buyer' | 'Vendor',
@@ -45,7 +45,7 @@ export default function CommunityPage() {
         formData.availabilityWindow || undefined,
         formData.contactInfo || undefined
       );
-      // Reset form and refresh page
+      // Reset form
       setFormData({
         role: 'Buyer',
         title: '',
@@ -53,7 +53,6 @@ export default function CommunityPage() {
         availabilityWindow: '',
         contactInfo: ''
       });
-      navigate(0);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Failed to create post');
     } finally {
@@ -63,21 +62,21 @@ export default function CommunityPage() {
 
   const handleDelete = async (postId: string) => {
     if (isDeleting) return; // Prevent multiple clicks
-        setIsDeleting(true);
-        try {
-        const success = await deletePost(postId);
-        if (success) {
-            navigate(0); // Refresh the page after successful deletion
-        }
-        } catch (error) {
-        console.error('Error deleting post:', error);
-        } finally {
-        setIsDeleting(false);
-        }
+    setIsDeleting(true);
+    try {
+      const success = await deletePost(postId);
+      if (!success) {
+        throw new Error('Failed to delete post');
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
-  const handleChatClick = async (userId: string) => {
-    const conversationId = await startConversation(userId);
+  const handleChatClick = async (hashedUserId: string) => {
+    const conversationId = await startConversation(hashedUserId);
     if (conversationId) {
       navigate(`/chat/${conversationId}`);
     }
@@ -88,14 +87,17 @@ export default function CommunityPage() {
     posts.map(post => (
       <CommunityPostCard
         key={post.id}
-        post={post}
-        currentUserId={user?.id}
+        post={{
+          ...post,
+          user_id: post.hashed_user_id // Map hashed_user_id to user_id for the card
+        }}
+        currentUserId={profile?.id}
         onDelete={handleDelete}
         isDeleting={isDeleting}
-        onChatClick={handleChatClick}
+        onChatClick={() => handleChatClick(post.hashed_user_id)}
       />
     ))
-  ), [posts, user?.id, isDeleting, handleDelete, handleChatClick]);
+  ), [posts, profile?.id, isDeleting, handleDelete, handleChatClick]);
 
   return (
     <div className="container max-w-4xl mx-auto px-4 py-8 animate-fade-in">

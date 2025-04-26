@@ -13,6 +13,8 @@ dist
 dist-ssr
 *.local
 
+supabase
+
 auth.js
 
 # Editor directories and files

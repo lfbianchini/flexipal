@@ -4,13 +4,15 @@ import { useAuthStore } from "@/lib/store";
 
 export type { Profile, AuthUser } from "@/lib/store";
 
+// Global flag to track subscription
+let authSubscription: { subscription: { unsubscribe: () => void } } | null = null;
+
 export function useAuth() {
   const {
     user,
     profile,
     isAdmin,
     loading,
-    initialized,
     initialize,
     setUser,
     setProfile,
@@ -20,29 +22,33 @@ export function useAuth() {
   } = useAuthStore();
 
   useEffect(() => {
-    // Initialize auth state if not already done
-    if (!initialized) {
-      initialize();
-    }
-    // Listen for auth events
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setProfile(null);
-        setIsAdmin(false);
-      } else if (session?.user) {
-        const { id, email, email_confirmed_at } = session.user;
-        setUser({ id, email, email_confirmed_at });
+    // Initialize auth state
+    initialize();
 
-        // Fetch profile data when user logs in
-        if (event === 'SIGNED_IN' && !initialized) {
-          refreshProfile();
+    // Only set up subscription if it doesn't exist
+    if (!authSubscription) {
+      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log("auth event", event);
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setProfile(null);
+          setIsAdmin(false);
         }
-      }
-    });
+      });
+      authSubscription = listener;
+    }
 
-    return () => listener?.subscription.unsubscribe();
-  }, [initialized, initialize, setUser, setProfile, setIsAdmin]);
+    // Cleanup subscription only when the app is truly unmounting
+    return () => {
+      window.addEventListener('beforeunload', () => {
+        if (authSubscription) {
+          console.log("unsubscribing from auth events");
+          authSubscription.subscription.unsubscribe();
+          authSubscription = null;
+        }
+      });
+    };
+  }, []); // Empty dependency array since we're using global state
 
   const signUp = useCallback(
     async (email: string, password: string, full_name: string) => {

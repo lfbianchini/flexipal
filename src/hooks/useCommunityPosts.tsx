@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { Database } from '@/integrations/supabase/types';
 
-type CommunityPost = Database['public']['Tables']['community_posts']['Row'] & {
+type CommunityPost = {
+  id: string;
+  created_at: string;
+  hashed_user_id: string;
+  role: "Buyer" | "Vendor";
+  title: string;
+  details: string;
+  availability_window: string | null;
+  contact_info: string | null;
   profile: {
     full_name: string;
     avatar_url: string;
@@ -23,22 +30,21 @@ export function useCommunityPosts() {
     async function getPosts() {
       setLoading(true);
       
-      const { data, error } = await supabase
-        .from('community_posts')
-        .select(`
-          *,
-          profile: profiles (
-            full_name,
-            avatar_url
-          )
-        `)
-        .order('created_at', { ascending: false });
+      try {
+        // Call the edge function to get hashed post data
+        const { data: hashedPosts, error } = await supabase.functions.invoke('get-hashed-community-posts');
 
-      if (!error && data) {
-        setPosts(data as CommunityPost[]);
+        if (error) {
+          console.error('Error fetching posts:', error);
+          return;
+        }
+
+        setPosts(hashedPosts);
+      } catch (err) {
+        console.error('Error invoking edge function:', err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     }
 
     // Subscribe to changes
@@ -75,62 +81,59 @@ export function useCommunityPosts() {
     availabilityWindow?: string,
     contactInfo?: string
   ) => {
-    if (!user?.id) return null;
+    if (!user?.email) return null;
 
-    // Check daily post count
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-community-post', {
+        body: {
+          role,
+          title,
+          details,
+          availability_window: availabilityWindow,
+          contact_info: contactInfo
+        }
+      });
 
-    const { data: todaysPosts, error: countError } = await supabase
-      .from('community_posts')
-      .select('id', { count: 'exact' })
-      .eq('user_id', user.id)
-      .gte('created_at', today.toISOString());
+      if (error) {
+        throw error;
+      }
 
-    if (countError) {
-      throw new Error('Failed to check post limit');
-    }
+      // Refetch posts to get the updated list with hashed IDs
+      const { data: hashedPosts, error: fetchError } = await supabase.functions.invoke('get-hashed-community-posts');
+      if (!fetchError && hashedPosts) {
+        setPosts(hashedPosts);
+      }
 
-    if ((todaysPosts?.length || 0) >= DAILY_POST_LIMIT) {
-      throw new Error(`You can only create ${DAILY_POST_LIMIT} posts per day`);
-    }
-
-    const { data, error } = await supabase
-      .from('community_posts')
-      .insert({
-        user_id: user.id,
-        role,
-        title,
-        details,
-        availability_window: availabilityWindow,
-        contact_info: contactInfo
-      })
-      .select(`
-        *,
-        profile: profiles (
-          full_name,
-          avatar_url
-        )
-      `)
-      .single();
-
-    if (error) {
+      return data;
+    } catch (error) {
+      console.error('Error creating post:', error);
       throw error;
     }
-
-    return data as CommunityPost;
   };
 
   const deletePost = async (postId: string) => {
-    if (!user?.id) return false;
+    if (!user?.email) return false;
 
-    const { error } = await supabase
-      .from('community_posts')
-      .delete()
-      .eq('id', postId)
-      .eq('user_id', user.id); // Ensure user can only delete their own posts
+    try {
+      const { error } = await supabase.functions.invoke('delete-community-post', {
+        body: { post_id: postId }
+      });
 
-    return !error;
+      if (error) {
+        throw error;
+      }
+
+      // Refetch posts after successful deletion
+      const { data: hashedPosts, error: fetchError } = await supabase.functions.invoke('get-hashed-community-posts');
+      if (!fetchError && hashedPosts) {
+        setPosts(hashedPosts);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      return false;
+    }
   };
 
   return {

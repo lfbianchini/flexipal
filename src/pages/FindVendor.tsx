@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import VendorCard from "../components/VendorCard";
 import EmptyState from "../components/EmptyState";
@@ -23,27 +23,34 @@ const LOCATIONS = [
 
 const FindVendor = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const [location, setLocation] = useState(LOCATIONS[0]);
-  const [results, setResults] = useState<ReturnType<typeof useVendors>['vendors'] | null>(null);
-  const { loading, getVendorsByLocation } = useVendors();
-  const [ lastSearchedLocation, setLastSearchedLocation ] = useState<string | null>(null);
+  const { loading, getVendorsByLocation, filteredVendors } = useVendors();
+  const [lastSearchedLocation, setLastSearchedLocation] = useState<string | null>(null);
   const { startConversation } = useChat();
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+  // Initial search when component mounts
+  useEffect(() => {
+    handleSearch();
+  }, []);
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    setLastSearchedLocation(location);
-    const found = getVendorsByLocation(location);
-    setResults(await found);
+    const searchLocation = location;
+    await getVendorsByLocation(searchLocation);
+    console.log("filteredVendors", filteredVendors);
+    console.log("loading", loading);
+    setLastSearchedLocation(searchLocation);
+    setIsInitialLoad(false);
   };
 
-  // Auto-search when location changes
   const handleLocationChange = (newLocation: string) => {
     setLocation(newLocation);
   };
 
-  const handleChatClick = async (vendorId: string) => {
-    const conversationId = await startConversation(vendorId);
+  const handleChatClick = async (hashedId: string) => {
+    const conversationId = await startConversation(hashedId);
     if (conversationId) {
       navigate(`/chat/${conversationId}`);
     }
@@ -52,7 +59,6 @@ const FindVendor = () => {
   const formatTimeWindow = (endTime: string | null) => {
     if (!endTime) return "No end time specified";
     const end = new Date(endTime);
-    const now = new Date();
     return `Until ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
@@ -60,6 +66,50 @@ const FindVendor = () => {
     if (!fullName) return '';
     const parts = fullName.split(' ');
     return `${parts[0]} ${parts[1]?.[0] || ''}`;
+  };
+
+  const renderContent = () => {
+    if (loading || isInitialLoad) {
+      return (
+        <div className="flex flex-col items-center justify-center h-32 animate-fade-in gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-usfgreen" />
+          <p className="text-gray-600">Searching for vendors...</p>
+        </div>
+      );
+    }
+    console.log("filteredVendors", filteredVendors);
+    console.log("loading", loading);
+    if (filteredVendors.length === 0 && !loading && lastSearchedLocation) {
+      return (
+        <div className="animate-fade-in">
+          <EmptyState location={lastSearchedLocation || location} />
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col gap-4 w-full">
+        {filteredVendors.map((vendor, index) => (
+          <div
+            key={vendor.hashed_id}
+            className="animate-fade-in-up"
+            style={{ animationDelay: `${index * 100}ms` }}
+          >
+            <VendorCard
+              name={formatName(vendor.profile?.full_name)}
+              location={vendor.location}
+              note={vendor.note || ''}
+              window={formatTimeWindow(vendor.end_time)}
+              img={vendor.profile?.avatar_url || ''}
+              live={vendor.is_live}
+              userId={vendor.hashed_id}
+              currentUserId={profile?.id}
+              onChatClick={() => handleChatClick(vendor.hashed_id)}
+            />
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -122,45 +172,7 @@ const FindVendor = () => {
 
         {/* Results Section */}
         <div className="space-y-4">
-          {results === null ? (
-            <div className="text-center py-8 animate-fade-in">
-              <div className="bg-white/50 backdrop-blur-sm rounded-xl p-6 border border-white shadow-sm">
-                <MapPin className="h-8 w-8 text-usfgold mx-auto mb-3 opacity-80" />
-                <p className="text-gray-600">Choose a location and search for vendors!</p>
-              </div>
-            </div>
-          ) : loading ? (
-            <div className="flex flex-col items-center justify-center h-32 animate-fade-in gap-3">
-              <Loader2 className="h-8 w-8 animate-spin text-usfgreen" />
-              <p className="text-gray-600">Searching for vendors...</p>
-            </div>
-          ) : results.length === 0 ? (
-            <div className="animate-fade-in">
-              <EmptyState location={lastSearchedLocation || location} />
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4 w-full">
-              {results.map((vendor, index) => (
-                <div
-                  key={vendor.id}
-                  className="animate-fade-in-up"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <VendorCard
-                    name={formatName(vendor.profiles?.full_name)}
-                    location={vendor.location}
-                    note={vendor.note || ''}
-                    window={formatTimeWindow(vendor.end_time)}
-                    img={vendor.profiles?.avatar_url || ''}
-                    live={vendor.is_live}
-                    userId={vendor.user_id}
-                    currentUserId={user?.id}
-                    onChatClick={() => handleChatClick(vendor.user_id)}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+          {renderContent()}
         </div>
       </div>
     </div>

@@ -1,9 +1,10 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { User, Camera, X } from "lucide-react";
+import { User, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import imageCompression from 'browser-image-compression';
 
 const MAX_NAME_LENGTH = 30;
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
@@ -16,13 +17,7 @@ export default function ProfilePage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const validateName = (name: string) => {
-    if (name.length > MAX_NAME_LENGTH) {
-      return false;
-    }
-    // Only allow letters, spaces, and basic punctuation
-    return /^[a-zA-Z\s\-'.]+$/.test(name);
-  };
+  const validateName = (name: string) => /^[a-zA-Z\s\-'.]+$/.test(name) && name.length <= MAX_NAME_LENGTH;
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newName = e.target.value;
@@ -43,46 +38,64 @@ export default function ProfilePage() {
     
     setSaving(true);
     try {
-      let avatarUrl = profile?.avatar_url;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session');
 
-      // Upload new avatar if selected
+      const updates: any = {
+        full_name: fullName
+      };
+
+      // Handle file upload
       if (selectedFile) {
-        const fileExt = selectedFile.name.split('.').pop();
-        const filePath = `${user.id}/avatar.${fileExt}`;
-
-        // Upload the file
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(filePath, selectedFile, {
-            upsert: true,
+        try {
+          // Compress and resize the image before uploading
+          const compressedFile = await imageCompression(selectedFile, {
+            maxWidthOrHeight: 512,
+            maxSizeMB: 0.3,
+            useWebWorker: true,
+            fileType: 'image/jpeg'
           });
 
-        if (uploadError) throw uploadError;
+          // Upload to temp folder first
+          const tempFileName = `temp/${Date.now()}-${compressedFile.name.replace(/\.[^/.]+$/, "")}.jpg`;
+          
+          const { error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(tempFileName, compressedFile, {
+              contentType: 'image/jpeg',
+              upsert: true
+            });
 
-        // Get the public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('avatars')
-          .getPublicUrl(filePath);
-        
-        avatarUrl = publicUrl;
+          if (uploadError) throw uploadError;
+
+          // Add the temp file path to the updates
+          updates.temp_avatar_path = tempFileName;
+        } catch (error) {
+          console.error('Upload error:', error);
+          throw new Error('Failed to upload image');
+        }
       }
 
-      // Update profile with new name and/or avatar URL
-      const { error } = await supabase
-        .from('profiles')
-        .update({ 
-          full_name: fullName.trim(),
-          avatar_url: avatarUrl
-        })
-        .eq('id', user.id);
+      // Call edge function to handle the profile update and image move
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-profile`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates)
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const { error } = await response.json();
+        throw new Error(error || 'Failed to update profile');
+      }
 
       await refreshProfile();
       handleCancelPreview();
     } catch (error) {
       console.error(error);
-      setError("Failed to update profile");
+      setError(error.message || "Failed to update profile");
     } finally {
       setSaving(false);
       window.location.reload();
@@ -95,13 +108,11 @@ export default function ProfilePage() {
     
     setError(null);
 
-    // Validate file type
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
       setError("Please upload a valid image file (JPEG, PNG, or WebP)");
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       setError("Image size must be less than 5MB");
       return;
@@ -133,17 +144,9 @@ export default function ProfilePage() {
           <div className="relative">
             <div className="w-24 h-24 rounded-full border-2 border-usfgold overflow-hidden bg-white/80 shadow-sm">
               {previewImage ? (
-                <img 
-                  src={previewImage} 
-                  alt="Preview" 
-                  className="w-full h-full object-cover"
-                />
+                <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
               ) : profile?.avatar_url ? (
-                <img 
-                  src={profile.avatar_url} 
-                  alt={profile.full_name || "Profile"} 
-                  className="w-full h-full object-cover"
-                />
+                <img src={profile.avatar_url} alt={profile.full_name || "Profile"} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center bg-white/80">
                   <User size={40} className="text-gray-400" />
@@ -191,9 +194,7 @@ export default function ProfilePage() {
               !isNameValid ? 'border-red-300' : ''
             }`}
           />
-          {error && (
-            <p className="text-xs text-red-500 mt-1">{error}</p>
-          )}
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -218,4 +219,4 @@ export default function ProfilePage() {
       </div>
     </div>
   );
-} 
+}

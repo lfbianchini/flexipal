@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
 export type VendorStatus = {
   id: string;
-  user_id: string;
   is_live: boolean;
   last_active: string;
   location: string | null;
@@ -19,38 +18,39 @@ export function useVendorStatus() {
   const [status, setStatus] = useState<VendorStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Memoize the fetch function to avoid recreation on each render
+  const fetchStatus = useCallback(async () => {
+    if (!user?.email) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+
+      const { data: response, error } = await supabase.functions.invoke('vendor-status', {
+        body: { action: 'get' },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) throw error;
+      if (response?.data) {
+        console.log('Setting new status:', response.data);
+        setStatus(response.data);
+        console.log('Status set to:', response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching vendor status:', error);
+    }
+  }, [user?.email]);
+
+  // Set up subscription
   useEffect(() => {
     let statusSubscription: any = null;
 
-    async function getInitialStatus() {
-      if (!user?.id) return;
-
-      setLoading(true);
-      // Get current status
-      const { data: existingStatus } = await supabase
-        .from('vendor_status')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (!existingStatus) {
-        // Create initial status if it doesn't exist
-        const { data: newStatus } = await supabase
-          .from('vendor_status')
-          .insert([
-            {
-              user_id: user.id,
-              is_live: false,
-              location: null,
-            },
-          ])
-          .select()
-          .single();
-        
-        setStatus(newStatus);
-      } else {
-        setStatus(existingStatus);
-      }
+    if (user?.email) {
+      // Get initial status
+      fetchStatus();
 
       // Subscribe to changes
       statusSubscription = supabase
@@ -60,60 +60,101 @@ export function useVendorStatus() {
           {
             event: '*',
             schema: 'public',
-            table: 'vendor_status',
-            filter: `user_id=eq.${user.id}`,
+            table: 'vendor_status'
           },
-          (payload: any) => {
-            setStatus(payload.new as VendorStatus);
+          (payload) => {
+            console.log('Received status change:', payload);
+          
+            if (payload.eventType === 'DELETE') {
+              setStatus(null);
+            } else if (payload.new) {
+              setStatus(payload.new as VendorStatus);
+            } else {
+              fetchStatus(); // fallback, but almost never needed
+            }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('Subscription status:', status);
+        });
 
-      setLoading(false);
+      console.log('Subscription set up');
     }
-
-    getInitialStatus();
 
     return () => {
       if (statusSubscription) {
+        console.log('Cleaning up subscription');
         supabase.removeChannel(statusSubscription);
       }
     };
-  }, [user?.id]);
+  }, [user?.email, fetchStatus]);
+
+  // Handle loading state
+  useEffect(() => {
+    if (!user?.email) {
+      setStatus(null);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    fetchStatus().finally(() => setLoading(false));
+  }, [user?.email, fetchStatus]);
 
   const updateStatus = async (updates: Partial<VendorStatus>) => {
-    if (!user?.id) return { error: new Error('Not authenticated') };
+    if (!user?.email) return { error: new Error('Not authenticated') };
 
-    const { data, error } = await supabase
-      .from('vendor_status')
-      .update({
-        ...updates,
-        last_active: new Date().toISOString(),
-      })
-      .eq('user_id', user.id)
-      .select()
-      .single();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        return { error: new Error('No session found') };
+      }
 
-    if (error) return { error };
-    return { data };
+      const { data: response, error } = await supabase.functions.invoke('vendor-status', {
+        body: { 
+          action: 'update',
+          ...updates
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) throw error;
+      
+      // Immediately update local state
+      if (response?.data) {
+        console.log('Setting status after update:', response.data);
+        setStatus(response.data);
+      }
+      
+      return { data: response?.data };
+    } catch (error) {
+      console.error('Error updating status:', error);
+      return { error };
+    }
   };
 
   const goLive = async (location: string, note?: string, endTime?: Date) => {
-    return updateStatus({ 
+    console.log('Going live with:', { location, note, endTime });
+    const result = await updateStatus({ 
       is_live: true, 
       location,
       note: note || null,
       end_time: endTime?.toISOString() || null
     });
+    return result;
   };
 
   const goOffline = async () => {
-    return updateStatus({ 
+    console.log('Going offline');
+    const result = await updateStatus({ 
       is_live: false, 
       location: null,
       note: null,
       end_time: null
     });
+    return result;
   };
 
   return {
