@@ -109,7 +109,6 @@ export function useVendorStatus() {
   };
 
   const goLive = async (location: string, note?: string, endTime?: Date) => {
-    console.log('Going live with:', { location, note, endTime });
     const result = await updateStatus({ 
       is_live: true, 
       location,
@@ -120,7 +119,6 @@ export function useVendorStatus() {
   };
 
   const goOffline = async () => {
-    console.log('Going offline');
     const result = await updateStatus({ 
       is_live: false, 
       location: null,

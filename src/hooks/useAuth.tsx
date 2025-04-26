@@ -28,7 +28,6 @@ export function useAuth() {
     // Only set up subscription if it doesn't exist
     if (!authSubscription) {
       const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log("auth event", event);
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setProfile(null);
@@ -42,7 +41,6 @@ export function useAuth() {
     return () => {
       window.addEventListener('beforeunload', () => {
         if (authSubscription) {
-          console.log("unsubscribing from auth events");
           authSubscription.subscription.unsubscribe();
           authSubscription = null;
         }
